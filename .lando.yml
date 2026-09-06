@@ -9,3 +9,20 @@ config:
   via: apache:2.4
   database: mysql:8.4
   xdebug: false
+
+tooling:
+  phpcs:
+    service: appserver
+    cmd: bash /app/scripts/phpcs.sh
+  phpcbf:
+    service: appserver
+    cmd: bash /app/scripts/phpcbf.sh
+  phpstan:
+    service: appserver
+    cmd: bash /app/scripts/phpstan.sh
+  phpunit:
+    service: appserver
+    cmd: bash /app/scripts/phpunit.sh
+  quality:
+    service: appserver
+    cmd: bash /app/scripts/quality.sh

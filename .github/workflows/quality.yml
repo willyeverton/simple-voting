@@ -1,0 +1,43 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: curl, dom, gd, intl, mbstring, mysqli, pdo_mysql, xml, zip
+          tools: composer:2.10
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Validate Composer configuration
+        run: composer validate --strict
+
+      - name: Audit dependencies
+        run: composer audit --no-interaction
+
+      - name: Check coding standards
+        run: bash scripts/phpcs.sh
+
+      - name: Run PHPStan
+        run: bash scripts/phpstan.sh
+
+      - name: Run PHPUnit
+        run: bash scripts/phpunit.sh
