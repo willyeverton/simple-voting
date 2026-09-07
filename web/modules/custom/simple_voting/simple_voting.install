@@ -1,0 +1,126 @@
+<?php
+
+/**
+ * @file
+ * Install, schema, and uninstall hooks for Simple Voting.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function simple_voting_schema(): array {
+  $schema['simple_voting_option'] = [
+    'description' => 'Options belonging to a Simple Voting question.',
+    'fields' => [
+      'id' => [
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'question_id' => [
+        'type' => 'varchar',
+        'length' => 128,
+        'charset' => 'ascii',
+        'not null' => TRUE,
+      ],
+      'title' => [
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ],
+      'description' => [
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => FALSE,
+      ],
+      'image_fid' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+      ],
+      'weight' => [
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+    ],
+    'primary key' => ['id'],
+    'indexes' => [
+      'question_weight' => ['question_id', 'weight'],
+      'question_id' => ['question_id'],
+    ],
+  ];
+
+  $schema['simple_voting_vote'] = [
+    'description' => 'Immutable user votes for Simple Voting questions.',
+    'fields' => [
+      'id' => [
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'question_id' => [
+        'type' => 'varchar',
+        'length' => 128,
+        'charset' => 'ascii',
+        'not null' => TRUE,
+      ],
+      'option_id' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'uid' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'timestamp' => [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['id'],
+    'unique keys' => [
+      'question_uid' => ['question_id', 'uid'],
+    ],
+    'indexes' => [
+      'question_option' => ['question_id', 'option_id'],
+      'uid' => ['uid'],
+      'question_id' => ['question_id'],
+    ],
+  ];
+
+  return $schema;
+}
+
+/**
+ * Adds the global voting switch for installations created before it existed.
+ */
+function simple_voting_update_11001(): void {
+  $config = \Drupal::configFactory()->getEditable('simple_voting.settings');
+  if ($config->get('voting_enabled') === NULL) {
+    $config->set('voting_enabled', TRUE)->save();
+  }
+}
+
+/**
+ * Marks the voting question entity definition as installed.
+ */
+function simple_voting_update_11002(): void {
+  // Entity definition changes are detected and recorded by Drupal's update
+  // system when this update is applied.
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function simple_voting_uninstall(): void {
+  $database = \Drupal::database();
+  foreach (['simple_voting_vote', 'simple_voting_option'] as $table) {
+    if ($database->schema()->tableExists($table)) {
+      $database->schema()->dropTable($table);
+    }
+  }
+}

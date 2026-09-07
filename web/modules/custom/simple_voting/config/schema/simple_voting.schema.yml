@@ -1,0 +1,33 @@
+simple_voting.settings:
+  type: config_object
+  label: 'Simple Voting settings'
+  mapping:
+    voting_enabled:
+      type: boolean
+      label: 'Voting enabled'
+
+simple_voting.question.*:
+  type: config_entity
+  label: 'Voting question'
+  mapping:
+    id:
+      type: string
+      label: 'Machine name'
+    uuid:
+      type: uuid
+      label: 'UUID'
+    title:
+      type: string
+      label: 'Title'
+    status:
+      type: boolean
+      label: 'Open for voting'
+    show_results:
+      type: boolean
+      label: 'Show results'
+    created:
+      type: integer
+      label: 'Created timestamp'
+    changed:
+      type: integer
+      label: 'Changed timestamp'

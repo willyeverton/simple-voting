@@ -1,0 +1,16 @@
+administer simple voting:
+  title: 'Administer simple voting'
+  description: 'Create and manage voting questions, options, lifecycle, and settings.'
+  restrict access: true
+
+access simple voting API:
+  title: 'Access the Simple Voting API'
+  description: 'Read questions and results through the manual API.'
+
+vote in polls:
+  title: 'Vote in polls'
+  description: 'View voting pages and register one vote per question.'
+
+view voting results:
+  title: 'View hidden voting results'
+  description: 'View results for questions configured to hide them.'

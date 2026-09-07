@@ -1,0 +1,8 @@
+name: Simple Voting
+type: module
+description: 'Provides secure questions, voting, results, and a manual API.'
+package: Custom
+core_version_requirement: ^11
+dependencies:
+  - drupal:file
+  - drupal:basic_auth

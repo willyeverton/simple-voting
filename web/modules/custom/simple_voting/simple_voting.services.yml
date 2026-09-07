@@ -1,0 +1,65 @@
+services:
+  logger.channel.simple_voting:
+    parent: logger.channel_base
+    arguments: ['simple_voting']
+
+  simple_voting.question_read:
+    class: Drupal\simple_voting\Service\QuestionReadService
+    arguments:
+      - '@entity_type.manager'
+      - '@simple_voting.option_storage'
+
+  simple_voting.option_storage:
+    class: Drupal\simple_voting\Service\OptionStorage
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@file.usage'
+      - '@cache_tags.invalidator'
+
+  simple_voting.vote_storage:
+    class: Drupal\simple_voting\Service\VoteStorage
+    arguments:
+      - '@database'
+
+  simple_voting.voting:
+    class: Drupal\simple_voting\Service\VotingService
+    arguments:
+      - '@config.factory'
+      - '@database'
+      - '@simple_voting.question_read'
+      - '@simple_voting.option_storage'
+      - '@simple_voting.vote_storage'
+      - '@lock'
+      - '@datetime.time'
+      - '@cache_tags.invalidator'
+      - '@logger.channel.simple_voting'
+
+  simple_voting.results:
+    class: Drupal\simple_voting\Service\VotingResultsService
+    arguments:
+      - '@database'
+      - '@simple_voting.question_read'
+
+  simple_voting.visibility:
+    class: Drupal\simple_voting\Service\VotingVisibilityService
+
+  simple_voting.question_deletion:
+    class: Drupal\simple_voting\Service\QuestionDeletionService
+    arguments:
+      - '@simple_voting.option_storage'
+      - '@simple_voting.vote_storage'
+      - '@cache_tags.invalidator'
+
+  simple_voting.api_serializer:
+    class: Drupal\simple_voting\Service\VotingApiSerializer
+    arguments:
+      - '@file_url_generator'
+      - '@entity_type.manager'
+
+  simple_voting.api_exception_subscriber:
+    class: Drupal\simple_voting\EventSubscriber\VotingApiExceptionSubscriber
+    arguments:
+      - '@logger.channel.simple_voting'
+    tags:
+      - { name: event_subscriber }
