@@ -25,6 +25,11 @@
         "drupal/core-dev": "^11",
         "drush/drush": "^13.7"
     },
+    "autoload": {
+        "psr-4": {
+            "Drupal\\simple_voting\\": "web/modules/custom/simple_voting/src/"
+        }
+    },
     "conflict": {
         "drupal/drupal": "*"
     },
@@ -33,14 +38,15 @@
     "config": {
         "allow-plugins": {
             "composer/installers": true,
-            "drupal/core-composer-scaffold": true,
-            "drupal/core-recipe-unpack": true,
-            "drupal/core-project-message": true,
-            "phpstan/extension-installer": true,
             "dealerdirect/phpcodesniffer-composer-installer": true,
+            "drupal/core-composer-scaffold": true,
+            "drupal/core-project-message": true,
+            "drupal/core-recipe-unpack": true,
             "php-http/discovery": true,
             "php-tuf/composer-integration": true,
-            "symfony/runtime": true
+            "phpstan/extension-installer": true,
+            "symfony/runtime": true,
+            "tbachert/spi": true
         },
         "sort-packages": true
     },

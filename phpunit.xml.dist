@@ -5,8 +5,8 @@
          cacheDirectory=".phpunit.cache"
          colors="true">
   <testsuites>
-    <testsuite name="Simple Voting">
-      <directory suffix="Test.php">web/modules/custom</directory>
+    <testsuite name="Simple Voting Unit">
+      <directory suffix="Test.php">web/modules/custom/simple_voting/tests/src/Unit</directory>
     </testsuite>
   </testsuites>
 </phpunit>

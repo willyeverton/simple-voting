@@ -13,6 +13,7 @@
 /.env
 /.lando/
 /.phpunit.cache/
+/.phpunit.drupal.cache/
 /.phpunit.result.cache
 /.phpstan.cache/
 
