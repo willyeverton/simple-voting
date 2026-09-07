@@ -16,3 +16,7 @@
 /.phpunit.result.cache
 /.phpstan.cache/
 
+/.devin/
+/AGENTS.md
+/AGENTS.local.md
+

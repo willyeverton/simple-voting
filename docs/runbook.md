@@ -1,5 +1,7 @@
 # Runbook de desenvolvimento
 
+> **Execução exclusiva do usuário:** os comandos abaixo são documentação para o usuário executar. Devin/modelo não deve executar testes, quality gates, auditorias, Drush status, Docker/Lando checks ou qualquer validação de código/ambiente.
+
 ## Ambiente
 
 O projeto usa Drupal 11, PHP 8.5 e MySQL 8.4 dentro do Lando. Execute comandos na raiz do projeto:
@@ -37,7 +39,7 @@ lando phpunit
 lando quality
 ```
 
-O comando `lando quality` executa a sequência completa. Um erro deve ser investigado; não use flags para ignorar auditorias ou requisitos de plataforma.
+O usuário deve executar `lando quality` para a sequência completa. Um erro deve ser investigado; não use flags para ignorar auditorias ou requisitos de plataforma.
 
 ## Drush
 
@@ -53,7 +55,7 @@ lando drush updb -y
 2. Atualizar ou criar um ADR quando uma decisão arquitetural for tomada.
 3. Implementar uma fatia vertical pequena.
 4. Adicionar testes correspondentes.
-5. Executar `lando quality`.
+5. O usuário executa `lando quality`.
 6. Revisar `git diff` e verificar que `.devin/`, `AGENTS.md`, secrets, `vendor/` e `web/core/` não foram staged.
 
 ## Diagnóstico

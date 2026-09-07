@@ -1,0 +1,109 @@
+{
+  "info": {
+    "name": "Simple Voting API",
+    "description": "Collection inicial alinhada a docs/openapi.yaml. Requer uma instalação Drupal e autenticação em todos os endpoints; o usuário precisa das permissões específicas para votar e consultar resultados ocultos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://simple-voting.lndo.site"
+    },
+    {
+      "key": "question_id",
+      "value": "pergunta-exemplo"
+    },
+    {
+      "key": "option_id",
+      "value": "1"
+    },
+    {
+      "key": "csrf_token",
+      "value": ""
+    }
+  ],
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "admin",
+        "type": "string"
+      },
+      {
+        "key": "password",
+        "value": "",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "List questions",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/questions",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "questions"]
+        }
+      }
+    },
+    {
+      "name": "Get question",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/questions/{{question_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "questions", "{{question_id}}"]
+        }
+      }
+    },
+    {
+      "name": "Create vote",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrf_token}}",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"option_id\": {{option_id}}\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/questions/{{question_id}}/votes",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "questions", "{{question_id}}", "votes"]
+        }
+      }
+    },
+    {
+      "name": "Get results",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/questions/{{question_id}}/results",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "questions", "{{question_id}}", "results"]
+        }
+      }
+    }
+  ]
+}

@@ -9,14 +9,14 @@ servers:
   - url: https://simple-voting.lndo.site
     description: Ambiente Lando local
 
+security:
+  - basicAuth: []
+  - cookieAuth: []
+
 tags:
   - name: Questions
   - name: Votes
   - name: Results
-
-security:
-  - basicAuth: []
-  - cookieAuth: []
 
 paths:
   /api/v1/questions:
@@ -124,6 +124,7 @@ paths:
     get:
       tags: [Results]
       summary: Exibe os resultados de uma pergunta
+      description: Todos os endpoints exigem autenticação e access simple voting API; resultados ocultos exigem adicionalmente a permissão view voting results.
       operationId: getResults
       responses:
         '200':
@@ -184,6 +185,7 @@ components:
         status:
           type: string
           enum: [open, closed]
+          description: Lifecycle obrigatório; somente perguntas open e votação global habilitada aceitam votos.
         show_results:
           type: boolean
 

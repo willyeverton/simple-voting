@@ -13,8 +13,8 @@ A solução deve ser segura, modular, observável, testável e capaz de preserva
 ## 2. Atores
 
 - **Administrador:** gerencia perguntas, opções, status e configuração global.
-- **Usuário autenticado:** consulta perguntas disponíveis e registra votos.
-- **Cliente externo:** consome a API com autenticação Drupal.
+- **Usuário:** consulta perguntas disponíveis; usuário autenticado autorizado registra votos.
+- **Cliente externo:** consome a API com autenticação Drupal obrigatória e permissões específicas.
 - **Operação:** consulta logs e executa verificações do sistema.
 
 ## 3. Escopo funcional
@@ -38,11 +38,11 @@ A solução deve ser segura, modular, observável, testável e capaz de preserva
 - Impedir segundo voto do mesmo usuário na mesma pergunta.
 - Confirmar o voto sem revelar resultados quando a pergunta estiver configurada para ocultá-los.
 - Exibir resultados quando permitido.
-- Bloquear perguntas fechadas e a votação globalmente desabilitada.
+- Bloquear a votação globalmente desabilitada; se o lifecycle aberto/fechado for adotado, bloquear perguntas fechadas.
 
 ### 3.3 API manual
 
-A API não deve utilizar JSON:API para a lógica central do desafio. O contrato inicial está em [`openapi.yaml`](openapi.yaml).
+A API não deve utilizar JSON:API para a lógica central do desafio. Todos os endpoints exigem autenticação Drupal; leitura, voto e resultados ocultos possuem permissões próprias. O contrato está em [`openapi.yaml`](openapi.yaml).
 
 Capacidades obrigatórias:
 
@@ -55,7 +55,7 @@ Capacidades obrigatórias:
 
 1. Perguntas não podem ser representadas por entidades `node`.
 2. O identificador da pergunta é único e não deve mudar depois de publicado ou referenciado pela API.
-3. Uma pergunta aberta pode receber votos somente quando a votação global estiver habilitada.
+3. Uma pergunta disponível pode receber votos somente quando a votação global estiver habilitada; se o lifecycle for adotado, ela também deve estar aberta.
 4. Apenas usuários autenticados e autorizados podem votar.
 5. Uma combinação `(question_id, uid)` pode possuir no máximo um voto.
 6. A opção enviada deve existir e pertencer à pergunta informada.
@@ -131,3 +131,23 @@ Os eventos devem conter contexto operacional seguro, como UID, identificador da 
 8. Observabilidade e cache.
 9. Testes unitários, Kernel, funcionais e de concorrência.
 10. Postman, documentação e validação final.
+
+## 11. Índice de artefatos de implementação
+
+- [`challenge-brief.md`](challenge-brief.md): fonte literal dos requisitos enviados no desafio.
+- [`functional-requirements.md`](functional-requirements.md): requisitos numerados e decisões de produto.
+- [`domain-model.md`](domain-model.md): agregados, campos, constraints, índices e cache.
+- [`permission-matrix.md`](permission-matrix.md): atores, permissões e fronteiras de acesso.
+- [`flows.md`](flows.md): fluxos CMS, API, resultados e concorrência.
+- [`error-catalog.md`](error-catalog.md): códigos de domínio e respostas HTTP.
+- [`security-threat-model.md`](security-threat-model.md): ameaças e controles.
+- [`test-plan.md`](test-plan.md): estratégia Unit/Kernel/Functional/Integration.
+- [`traceability-matrix.md`](traceability-matrix.md): requisito até evidência.
+- [`operational-readiness.md`](operational-readiness.md): checklist de operação e produção.
+- [`delivery-checklist.md`](delivery-checklist.md): checklist de entrega do desafio.
+- [`decision-log.md`](decision-log.md): resumo das decisões vigentes.
+- [`implementation-plan.md`](implementation-plan.md): fatias verticais de implementação.
+- [`glossary.md`](glossary.md): vocabulário comum do domínio.
+- [`openapi.yaml`](openapi.yaml): contrato da API.
+- [`../postman/simple-voting.postman_collection.json`](../postman/simple-voting.postman_collection.json): collection inicial.
+- [`adr/`](adr/): decisões arquiteturais registradas.
