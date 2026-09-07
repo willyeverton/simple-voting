@@ -1,5 +1,9 @@
 # Runbook de desenvolvimento
 
+- Onboarding e instalação: [`../README.md`](../README.md)
+- Arquitetura e decisões de engenharia: [`architecture.md`](architecture.md)
+- Testes manuais: [`manual-test-plan.md`](manual-test-plan.md)
+
 > **Execução exclusiva do usuário:** os comandos abaixo são documentação para o usuário executar. Devin/modelo não deve executar testes, quality gates, auditorias, Drush status, Docker/Lando checks ou qualquer validação de código/ambiente.
 
 ## Ambiente
@@ -28,7 +32,14 @@ lando composer audit
 
 ## Site Drupal
 
-A instalação do site ainda não é executada pelo bootstrap. Quando a implementação começar, instalar o site com credenciais locais fornecidas fora do Git e configurar `settings.local.php` sem secrets versionados.
+A instalação do site ainda não é executada pelo bootstrap. Instale o site com credenciais locais fornecidas fora do Git e configure `settings.local.php` sem secrets versionados. Após a instalação, habilite o módulo e limpe o cache:
+
+```bash
+lando drush en simple_voting -y
+lando drush cr
+```
+
+Conceda as permissões do módulo a roles locais de teste sem versionar credenciais ou dumps contendo dados pessoais.
 
 ## Quality gates
 
@@ -39,7 +50,13 @@ lando phpunit
 lando quality
 ```
 
-O usuário deve executar `lando quality` para a sequência completa. Um erro deve ser investigado; não use flags para ignorar auditorias ou requisitos de plataforma.
+O usuário deve executar `lando quality` para a sequência de código e testes. Com um site Drupal instalado, use também a sequência completa de bootstrap:
+
+```bash
+lando quality && lando drush updb -y && lando drush cr && lando drush status
+```
+
+Um erro deve ser investigado; não use flags para ignorar auditorias ou requisitos de plataforma. O `drush cr` é importante porque descobre rotas, entidades e plugins em runtime.
 
 ## Drush
 

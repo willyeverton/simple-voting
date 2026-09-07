@@ -5,7 +5,7 @@
 | Pergunta | Enquete administrável que possui opções e recebe votos. |
 | Opção | Alternativa selecionável dentro de uma pergunta. |
 | Voto | Registro imutável da opção escolhida por um usuário em uma pergunta. |
-| Identificador | Machine name estável usado em rotas, API e referências. |
+| Identificador | Machine name estável usado em rotas, API e referências; aceita letras minúsculas, números e underscore (`_`), mas não hífen (`-`). |
 | Votação global | Configuração que habilita ou bloqueia novos votos em todo o sistema. |
 | Pergunta aberta | Pergunta que aceita voto quando a votação global está habilitada. |
 | Pergunta fechada | Pergunta que não aceita novos votos. |

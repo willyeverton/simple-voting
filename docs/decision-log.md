@@ -15,5 +15,6 @@
 | Exclusão | Sem hard delete após votos por padrão | ADR-0007 |
 | Resultados | `VotingResultsService` centralizado | ADR-0008 |
 | IP | Não persistir IP bruto por padrão | ADR-0009 |
+| Discoverability | API lista abertas; CMS pode exibir abertas e fechadas sem liberar voto | ADR-0011 |
 | Testes | Unit + Kernel + Functional + Integration concorrente | ADR-0010 |
 | Qualidade | Lando, Composer audit, PHPCS, PHPStan, PHPUnit e CI | ADR-0004 |

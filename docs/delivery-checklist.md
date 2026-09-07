@@ -26,27 +26,30 @@ Este checklist separa o que já está preparado do que depende da implementaçã
 - [x] Collection Postman.
 - [x] Catálogo de erros.
 - [x] Threat model.
-- [x] Plano de testes.
+- [x] Plano de testes automatizados.
+- [x] Plano de testes manuais.
 - [x] Matriz de rastreabilidade.
 - [x] ADRs.
+- [x] README de onboarding.
+- [x] Documento de arquitetura e engenharia.
 - [x] Runbook.
 - [x] Checklist operacional.
 
 ## Implementação
 
-- [ ] Módulo customizado habilitável.
-- [ ] Entidade customizada sem `node`.
-- [ ] CRUD administrativo.
-- [ ] Opções com descrição e imagem.
-- [ ] Configuração global.
-- [ ] Service de votação.
-- [ ] Constraint de voto único.
-- [ ] Proteção contra concorrência.
-- [ ] Interface CMS.
-- [ ] API manual.
-- [ ] Resultados e visibilidade.
-- [ ] Logs e observabilidade.
-- [ ] Cache e invalidação.
+- [x] Módulo customizado habilitável.
+- [x] Entidade customizada sem `node`.
+- [x] CRUD administrativo.
+- [x] Opções com descrição e imagem.
+- [x] Configuração global.
+- [x] Service de votação.
+- [x] Constraint de voto único.
+- [x] Proteção contra concorrência.
+- [x] Interface CMS.
+- [x] API manual.
+- [x] Resultados e visibilidade.
+- [x] Logs e observabilidade.
+- [x] Cache e invalidação.
 
 ## Evidências
 

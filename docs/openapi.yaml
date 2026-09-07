@@ -23,6 +23,7 @@ paths:
     get:
       tags: [Questions]
       summary: Lista perguntas disponíveis
+      description: Retorna somente perguntas abertas e elegíveis para votação. Uma pergunta fechada conhecida continua consultável pelo endpoint de detalhe.
       operationId: listQuestions
       responses:
         '200':
@@ -170,8 +171,8 @@ components:
       required: true
       schema:
         type: string
-        pattern: '^[a-z0-9][a-z0-9_-]{1,127}$'
-      description: Identificador estável da pergunta.
+        pattern: '^[a-z0-9][a-z0-9_]{1,127}$'
+      description: Identificador estável da pergunta. Use somente letras minúsculas, números e underscore (_); hífen (-) não é aceito.
 
   schemas:
     QuestionSummary:
