@@ -1,0 +1,68 @@
+<header class="sv-site-header" role="banner">
+  <div class="sv-container sv-site-header__inner">
+    <div class="sv-header-branding">
+      {% if page.header %}
+        {{ page.header }}
+      {% else %}
+        <a class="sv-site-name" href="{{ front_page }}" rel="home">{{ site_name }}</a>
+      {% endif %}
+    </div>
+    <div class="sv-header-navigation">
+      {% if page.account_menu %}
+        <nav class="sv-account-menu" aria-label="{{ 'Account navigation'|t }}">
+          {{ page.account_menu }}
+        </nav>
+      {% endif %}
+      {% if page.primary_menu %}
+        <nav class="sv-primary-menu" aria-label="{{ 'Primary navigation'|t }}">
+          {{ page.primary_menu }}
+        </nav>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+{% if page.messages %}
+  <div class="sv-messages" role="region" aria-label="{{ 'Messages'|t }}">
+    <div class="sv-container">
+      {{ page.messages }}
+    </div>
+  </div>
+{% endif %}
+
+<main id="main-content" class="sv-main" role="main" tabindex="-1">
+  <div class="sv-container">
+    <div class="sv-layout{{ page.sidebar_first ? ' sv-layout--has-first' : '' }}{{ page.sidebar_second ? ' sv-layout--has-second' : '' }}">
+      {% if page.sidebar_first %}
+        <aside class="sv-sidebar sv-sidebar--first" aria-label="{{ 'First sidebar'|t }}">
+          {{ page.sidebar_first }}
+        </aside>
+      {% endif %}
+
+      <div class="sv-main-column">
+        {% if page.breadcrumb %}
+          <nav class="sv-breadcrumb" aria-label="{{ 'Breadcrumb'|t }}">
+            {{ page.breadcrumb }}
+          </nav>
+        {% endif %}
+        <div class="sv-content-card">
+          {{ page.content }}
+        </div>
+      </div>
+
+      {% if page.sidebar_second %}
+        <aside class="sv-sidebar sv-sidebar--second" aria-label="{{ 'Second sidebar'|t }}">
+          {{ page.sidebar_second }}
+        </aside>
+      {% endif %}
+    </div>
+  </div>
+</main>
+
+{% if page.footer %}
+  <footer class="sv-site-footer" role="contentinfo">
+    <div class="sv-container">
+      {{ page.footer }}
+    </div>
+  </footer>
+{% endif %}

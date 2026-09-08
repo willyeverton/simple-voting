@@ -1,0 +1,17 @@
+name: 'Simple Voting'
+type: theme
+description: 'Accessible presentation theme for Simple Voting.'
+core_version_requirement: ^11
+base theme: false
+libraries:
+  - simple_voting_theme/global
+regions:
+  header: 'Header'
+  primary_menu: 'Primary menu'
+  account_menu: 'Account menu'
+  messages: 'Messages'
+  breadcrumb: 'Breadcrumb'
+  content: 'Content'
+  sidebar_first: 'Sidebar first'
+  sidebar_second: 'Sidebar second'
+  footer: 'Footer'
