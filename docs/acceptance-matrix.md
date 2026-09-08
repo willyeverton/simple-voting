@@ -10,7 +10,7 @@ Cada requisito deve possuir evidência em teste automatizado, teste manual docum
 | AC-004 | Opção possui título, descrição e imagem válida | Dados são exibidos com saída segura | Functional test |
 | AC-005 | Upload inválido | Extensão/tamanho são rejeitados | Functional test |
 | AC-006 | Pergunta é encerrada (quando lifecycle for adotado) | Interface e API recusam novos votos | API/functional test |
-| AC-007 | Votação global é desabilitada | CMS e API recusam novos votos | API/functional test |
+| AC-007 | Votação global é desabilitada | CMS não exibe o catálogo de votação e a API recusa novas escritas | API/functional test |
 | AC-008 | Cliente consulta pergunta disponível | Pergunta e opções são retornadas sem dados privados | API test |
 | AC-009 | Cliente envia opção de outra pergunta | Request é rejeitado e nenhum voto é persistido | Unit/API test |
 | AC-010 | Usuário registra primeiro voto | Voto é criado e resposta indica sucesso | Unit/API test |
@@ -39,3 +39,7 @@ Cada requisito deve possuir evidência em teste automatizado, teste manual docum
 | AC-033 | Cliente anônimo acessa qualquer endpoint da API | Resposta é `401` sem dados de negócio | Functional API test |
 | AC-034 | Registro de voto é persistido | Nenhum IP bruto é salvo por padrão | Kernel/security test |
 | AC-035 | CMS, bloco e API consultam resultados | Todos usam o `VotingResultsService` e a mesma regra de percentual | Architecture/unit test |
+| AC-036 | Visitante anônimo acessa a home | Shell global exibe nome do site e link de login sem expor controles de votação | Functional/manual |
+| AC-037 | Usuário autorizado acessa o CMS | Menu de conta e link público de perguntas aparecem conforme as permissões | Functional test |
+| AC-038 | Usuário sem `vote in polls` acessa o CMS | Link de perguntas não aparece e `/voting` retorna acesso negado | Functional/security test |
+| AC-039 | Tema global é ativado | `simple_voting_theme` torna-se frontend padrão e `system.theme:admin` permanece inalterado | Kernel/functional/manual |

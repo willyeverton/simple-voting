@@ -7,6 +7,9 @@
 - [ ] Schema de instalação e update hooks foram testados.
 - [ ] Permissões foram exportadas/documentadas.
 - [ ] Configuração possui schema.
+- [ ] Tema frontend padrão e tema administrativo foram revisados.
+- [ ] Blocos opcionais do tema e regiões foram reconstruídos após o cache rebuild.
+- [ ] Login, menus, mensagens e páginas sem conteúdo foram validados no tema global.
 - [ ] Logs usam canal dedicado.
 - [ ] Erros externos não expõem stack trace.
 - [ ] Cache tags/contexts foram revisados.
@@ -34,6 +37,7 @@ Observar aumento de:
 - Usar update hook reversível quando possível.
 - Fazer backup antes de alterações destrutivas de schema.
 - Fechar a pergunta para conter comportamento incorreto enquanto a correção é preparada.
+- Restaurar `system.theme:default` para o tema anterior se o shell global apresentar regressão.
 - Registrar incidentes e decisão de recuperação.
 
 ## Privacidade

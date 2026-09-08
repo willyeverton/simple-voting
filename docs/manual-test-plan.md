@@ -165,6 +165,25 @@ https://simple-voting.lndo.site/voting
 
 A pergunta deve aparecer na listagem como disponível.
 
+## 3.1. Menu e apresentação
+
+Após `drush updb -y` e `drush cr`, o tema `simple_voting_theme` deve estar instalado e definido como tema frontend padrão.
+
+Como visitante anônimo:
+
+- acesse a home (`/`);
+- confirme que o nome do site e o link **Log in** aparecem;
+- confirme que o tema não exibe links de votação para quem não possui `vote in polls`.
+
+Como usuário autenticado com `vote in polls`:
+
+- confirme que o menu de conta exibe **Log out**;
+- confirme que o menu principal exibe **Voting questions**;
+- abra `/voting` e valide título, breadcrumb, mensagens e conteúdo;
+- confirme que sidebars e footer não quebram quando não houver blocos posicionados.
+
+Valide também foco de teclado, contraste, viewport móvel e ausência de dependências React ou JavaScript obrigatórias para registrar o voto. Confirme que o tema administrativo continua sendo o configurado anteriormente.
+
 ---
 
 # Teste pelo navegador
@@ -255,7 +274,8 @@ Como `voter`, acesse:
 Resultado esperado:
 
 - a interface informa que a votação está temporariamente desabilitada;
-- o formulário não permite novo voto;
+- a listagem não exibe perguntas nem links de votação;
+- o formulário não permite novo voto quando uma pergunta é acessada diretamente;
 - resultados históricos autorizados continuam sujeitos à política de visibilidade.
 
 Depois do teste, habilite novamente a votação.

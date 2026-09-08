@@ -36,8 +36,11 @@ A instalação do site ainda não é executada pelo bootstrap. Instale o site co
 
 ```bash
 lando drush en simple_voting -y
+lando drush updb -y
 lando drush cr
 ```
+
+A instalação/atualização do módulo instala `simple_voting_theme` e o define como tema frontend padrão, preservando o tema administrativo. Após o cache rebuild, revise menus e regiões do tema. Para rollback operacional, altere `system.theme:default` para o tema anterior e reconstrua o cache.
 
 Conceda as permissões do módulo a roles locais de teste sem versionar credenciais ou dumps contendo dados pessoais.
 

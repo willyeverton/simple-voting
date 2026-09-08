@@ -50,6 +50,9 @@ Este checklist separa o que já está preparado do que depende da implementaçã
 - [x] Resultados e visibilidade.
 - [x] Logs e observabilidade.
 - [x] Cache e invalidação.
+- [x] Tema global customizado sem React.
+- [x] Shell público com login, menus, mensagens e regiões.
+- [x] Ativação automática do tema frontend com preservação do admin theme.
 
 ## Evidências
 
@@ -61,6 +64,7 @@ Este checklist separa o que já está preparado do que depende da implementaçã
 - [ ] PHPUnit com testes do módulo.
 - [ ] Testes Kernel.
 - [ ] Testes funcionais.
+- [ ] Teste funcional do tema global e menus.
 - [ ] Teste de concorrência com banco real.
 - [ ] Execução completa da collection Postman.
 - [ ] Restauração do dump em ambiente limpo.

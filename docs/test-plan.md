@@ -48,6 +48,10 @@ Cobrir:
 - Pergunta fechada e votação global desabilitada.
 - Todos os endpoints recusam acesso anônimo.
 - Permissões distintas para acessar API, votar e consultar resultado oculto.
+- Home anônima com link de login e usuário autenticado com link de logout.
+- Menu público de perguntas visível somente para usuários com `vote in polls`.
+- Regiões globais, mensagens, breadcrumb, título, sidebars e footer sem regressões.
+- Tema administrativo preservado após a ativação do tema frontend.
 
 ### Concorrência/integração
 
@@ -74,6 +78,7 @@ Cobrir:
 | Upload/form | Functional + security test |
 | Concorrência | Unit + integration real |
 | Configuração/CI | Composer validate + audit + quality |
+| Tema/apresentação | Functional + revisão manual acessível + `drush cr` |
 
 ## Critério de conclusão
 

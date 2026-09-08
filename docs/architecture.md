@@ -119,6 +119,14 @@ Controllers, Forms e Block fazem composição e apresentação. Não devem criar
 
 Todos os serviços são obtidos por dependency injection; consumidores não usam service locator estático para regras de negócio.
 
+### Tema global e apresentação
+
+`simple_voting_theme` é o tema frontend global do site. Ele fornece o shell público, regiões de header, menus, mensagens, breadcrumb, conteúdo, sidebars e footer, além dos estilos acessíveis usados pelo CMS e pelas páginas de votação. A instalação do módulo instala o tema e define apenas `system.theme:default`; o tema administrativo configurado em `system.theme:admin` permanece inalterado.
+
+O tema não contém regras de votação, validação de payload, autorização, persistência, cálculo de resultados ou decisões de cache de domínio. Login/logout e visibilidade de menus continuam sendo controlados pelos menus e permissões nativas do Drupal. A apresentação usa Twig, render arrays e CSS sem React ou dependência frontend adicional.
+
+A mudança do tema padrão é operacional e reversível por configuração Drupal. Após a instalação/atualização, o cache de descoberta deve ser reconstruído e as regiões/blocos opcionais devem ser revisados no ambiente real.
+
 ## 5. Fluxo de administração
 
 1. O administrador acessa uma rota protegida por `administer simple voting`.
@@ -175,7 +183,8 @@ O projeto diferencia visibilidade histórica de elegibilidade para mutação, co
 - o detalhe da API pode retornar uma pergunta fechada conhecida com `status: closed`;
 - o CMS pode exibir perguntas fechadas como somente leitura;
 - pergunta fechada nunca aceita voto;
-- `voting_enabled` bloqueia novas escritas, mas não apaga resultados históricos autorizados.
+- `voting_enabled` bloqueia novas escritas; a listagem CMS exibe somente uma mensagem de indisponibilidade enquanto a configuração estiver desabilitada.
+- A configuração não apaga nem oculta resultados históricos autorizados.
 
 Essa separação evita usar `404` para representar um recurso que existe, mas não aceita mutação.
 
