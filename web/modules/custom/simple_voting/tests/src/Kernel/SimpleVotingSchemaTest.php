@@ -1,6 +1,6 @@
 <?php
 
-namespace Drupal\KernelTests\simple_voting;
+namespace Drupal\Tests\simple_voting\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
 
@@ -35,6 +35,15 @@ final class SimpleVotingSchemaTest extends KernelTestBase {
     self::assertTrue($schema->tableExists('simple_voting_option'));
     self::assertTrue($schema->tableExists('simple_voting_vote'));
     self::assertTrue($schema->indexExists('simple_voting_vote', 'question_uid'));
+  }
+
+  /**
+   * Confirms the voting question entity definition is installed.
+   */
+  public function testVotingQuestionEntityDefinitionIsInstalled(): void {
+    \simple_voting_update_11003();
+    $update_manager = $this->container->get('entity.definition_update_manager');
+    self::assertArrayHasKey('voting_question', $update_manager->getEntityTypes());
   }
 
 }

@@ -96,6 +96,103 @@ function simple_voting_schema(): array {
 }
 
 /**
+ * Implements hook_install().
+ */
+function simple_voting_install(): void {
+  simple_voting_set_default_theme();
+  simple_voting_ensure_theme_blocks();
+}
+
+/**
+ * Sets the frontend default theme.
+ *
+ * The administrative theme is not changed.
+ */
+function simple_voting_set_default_theme(): void {
+  $theme_handler = \Drupal::service('theme_handler');
+  if (!$theme_handler->themeExists('simple_voting_theme')) {
+    \Drupal::service('theme_installer')->install(['simple_voting_theme']);
+  }
+
+  \Drupal::configFactory()
+    ->getEditable('system.theme')
+    ->set('default', 'simple_voting_theme')
+    ->save();
+}
+
+/**
+ * Ensures the global theme's default blocks exist.
+ */
+function simple_voting_ensure_theme_blocks(): void {
+  $storage = \Drupal::entityTypeManager()->getStorage('block');
+  $blocks = [
+    'simple_voting_theme_main_menu' => [
+      'plugin' => 'system_menu_block:main',
+      'region' => 'primary_menu',
+      'settings' => [
+        'id' => 'system_menu_block:main',
+        'label' => 'Main navigation',
+        'label_display' => '0',
+        'provider' => 'system',
+        'level' => 1,
+        'depth' => 2,
+        'expand_all_items' => TRUE,
+      ],
+    ],
+    'simple_voting_theme_account_menu' => [
+      'plugin' => 'system_menu_block:account',
+      'region' => 'account_menu',
+      'settings' => [
+        'id' => 'system_menu_block:account',
+        'label' => 'User account menu',
+        'label_display' => '0',
+        'provider' => 'system',
+        'level' => 1,
+        'depth' => 1,
+        'expand_all_items' => FALSE,
+      ],
+    ],
+    'simple_voting_theme_messages' => [
+      'plugin' => 'system_messages_block',
+      'region' => 'messages',
+      'settings' => [
+        'id' => 'system_messages_block',
+        'label' => 'Status messages',
+        'label_display' => '0',
+        'provider' => 'system',
+      ],
+    ],
+    'simple_voting_theme_page_title' => [
+      'plugin' => 'page_title_block',
+      'region' => 'content',
+      'settings' => [
+        'id' => 'page_title_block',
+        'label' => 'Page title',
+        'label_display' => '0',
+        'provider' => 'core',
+      ],
+    ],
+  ];
+
+  foreach ($blocks as $id => $block) {
+    if ($storage->load($id)) {
+      continue;
+    }
+    $storage->create([
+      'id' => $id,
+      'theme' => 'simple_voting_theme',
+      'status' => TRUE,
+      'region' => $block['region'],
+      'weight' => 0,
+      'provider' => NULL,
+      'plugin' => $block['plugin'],
+      'settings' => $block['settings'],
+      'visibility' => [],
+    ])->save();
+  }
+}
+
+/**
  * Adds the global voting switch for installations created before it existed.
  */
 function simple_voting_update_11001(): void {
@@ -111,6 +208,29 @@ function simple_voting_update_11001(): void {
 function simple_voting_update_11002(): void {
   // Entity definition changes are detected and recorded by Drupal's update
   // system when this update is applied.
+}
+
+/**
+ * Installs the voting question entity definition for existing sites.
+ */
+function simple_voting_update_11003(): void {
+  $entity_type = \Drupal::entityTypeManager()->getDefinition('voting_question');
+  \Drupal::entityDefinitionUpdateManager()->installEntityType($entity_type);
+}
+
+/**
+ * Installs the global Simple Voting frontend theme for existing sites.
+ */
+function simple_voting_update_11004(): void {
+  simple_voting_set_default_theme();
+}
+
+/**
+ * Installs missing default blocks for the global frontend theme.
+ */
+function simple_voting_update_11005(): void {
+  simple_voting_set_default_theme();
+  simple_voting_ensure_theme_blocks();
 }
 
 /**

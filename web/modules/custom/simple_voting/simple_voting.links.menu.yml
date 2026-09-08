@@ -1,3 +1,10 @@
+simple_voting.public_questions:
+  title: 'Voting questions'
+  description: 'View available voting questions.'
+  route_name: simple_voting.questions
+  menu_name: main
+  weight: 0
+
 simple_voting.admin:
   title: 'Simple Voting'
   description: 'Manage voting questions and settings.'
@@ -6,7 +13,7 @@ simple_voting.admin:
   weight: 50
 
 simple_voting.settings:
-  title: 'Voting settings'
+  title: 'Enable Voting'
   description: 'Configure global voting availability.'
   route_name: simple_voting.settings
   parent: simple_voting.admin

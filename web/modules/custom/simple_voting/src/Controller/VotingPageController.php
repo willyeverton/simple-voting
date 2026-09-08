@@ -44,13 +44,6 @@ final class VotingPageController extends ControllerBase {
    * Lists open and closed questions for the CMS.
    */
   public function listQuestions(): array {
-    $questions = $this->questionRead->getQuestions();
-    $questionIds = array_map(static fn ($question): string => (string) $question->id(), $questions);
-    $voted = array_flip($this->voteStorage->getVotedQuestionIds(
-      (int) $this->votingAccount->id(),
-      $questionIds,
-    ));
-
     $build = [
       '#cache' => [
         'tags' => ['simple_voting:question-list', 'config:simple_voting.settings'],
@@ -59,11 +52,22 @@ final class VotingPageController extends ControllerBase {
     ];
 
     if (!(bool) $this->votingConfigFactory->get('simple_voting.settings')->get('voting_enabled')) {
-      $build['warning'] = [
-        '#plain_text' => $this->t('Voting is temporarily disabled. Existing authorized results remain available.'),
+      $build['disabled'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'p',
+        '#value' => $this->t('Voting is temporarily disabled. Existing authorized results remain available.'),
+        '#attributes' => ['class' => ['messages', 'messages--warning']],
         '#weight' => -10,
       ];
+      return $build;
     }
+
+    $questions = $this->questionRead->getQuestions();
+    $questionIds = array_map(static fn ($question): string => (string) $question->id(), $questions);
+    $voted = array_flip($this->voteStorage->getVotedQuestionIds(
+      (int) $this->votingAccount->id(),
+      $questionIds,
+    ));
 
     if (!$questions) {
       $build['empty'] = ['#plain_text' => $this->t('No voting questions are available.')];
