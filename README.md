@@ -2,7 +2,7 @@
 
 Backend Drupal 11 para o desafio técnico de votação simples. Administradores cadastram perguntas e opções; usuários autenticados votam uma única vez por pergunta pelo CMS ou por uma API manual versionada.
 
-> O projeto é focado em backend, integridade transacional, segurança, observabilidade e qualidade operacional. Não há uma aplicação React nem um design visual sofisticado no escopo atual.
+> O projeto é focado em backend, integridade transacional, segurança, observabilidade e qualidade operacional. O tema global Drupal fornece a apresentação do site sem uma aplicação React ou dependências frontend adicionais.
 
 ## Estado do projeto
 
@@ -66,6 +66,15 @@ lando drush cr
 ```
 
 Se o site já estiver instalado, pule o instalador e execute apenas a habilitação/atualização do módulo.
+
+Ao instalar o módulo em um site novo, ou ao aplicar `updb` em um site existente, o tema `simple_voting_theme` é instalado e definido como tema frontend padrão. O tema administrativo configurado não é alterado.
+
+Para restaurar outro tema frontend posteriormente:
+
+```bash
+lando drush config:set system.theme default NOME_DO_TEMA -y
+lando drush cr
+```
 
 ## Configuração inicial
 

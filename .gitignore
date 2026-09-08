@@ -9,6 +9,9 @@
 /web/sites/*/files/
 /web/sites/*/settings.local.php
 /web/sites/*/services.local.yml
+/web/sites/*/settings.php
+/web/sites/*/services.yml
+/web/sites/simpletest/
 
 /.env
 /.lando/

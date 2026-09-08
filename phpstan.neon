@@ -4,6 +4,6 @@ parameters:
         - web/modules/custom
         - web/themes/custom
     excludePaths:
-        - web/modules/custom/*/tests/src/Kernel
-        - web/modules/custom/*/tests/src/Functional
+        - web/modules/custom/*/tests/src/Kernel/*
+        - web/modules/custom/*/tests/src/Functional/*
     tmpDir: .phpstan.cache
