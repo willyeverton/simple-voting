@@ -2,8 +2,6 @@
 
 Este checklist separa o que já está preparado do que depende da implementação e da configuração final do ambiente.
 
-> As evidências marcadas foram informadas pelo usuário após a execução dos comandos. Como ajustes de código foram aplicados depois dessa execução, os gates devem ser repetidos antes da entrega final. O dump restaurável continua pendente.
-
 ## Repositório e ambiente
 
 - [x] Projeto inicializado com Git.
@@ -14,7 +12,8 @@ Este checklist separa o que já está preparado do que depende da implementaçã
 - [x] MySQL 8.4 no container.
 - [x] Drush instalado no projeto.
 - [x] Site Drupal instalado com dados de demonstração.
-- [ ] Dump restaurável em `dump/`.
+- [x] Dump SQL sanitizado gerado em `dump/simple-voting-demo.sql`.
+- [ ] Restauração do dump em ambiente limpo.
 
 ## Documentação
 

@@ -116,6 +116,19 @@ lando drush cr
 
 Confirme antes que o tema anterior continua instalado e que a troca não interfere no tema administrativo.
 
+## Dump de demonstração
+
+O arquivo `../dump/simple-voting-demo.sql` contém um dump ordenado do ambiente Drupal com as tabelas de configuração e do módulo necessárias para demonstrar perguntas e opções. Para evitar transportar dados pessoais ou credenciais locais, o dump exclui usuários, sessões, votos, logs, caches e tabelas temporárias de teste; o e-mail administrativo foi normalizado para um domínio reservado.
+
+A restauração ainda deve ser validada somente em ambiente limpo. Não importe este arquivo em um banco existente sem backup verificado:
+
+```bash
+lando db-import dump/simple-voting-demo.sql
+lando drush cr
+```
+
+O dump é um artefato de banco; arquivos binários enviados não são substituídos por ele. Após a restauração, confirme que as opções continuam acessíveis e que imagens locais, quando usadas, foram fornecidas separadamente ou removidas do cenário de demonstração.
+
 ## Desinstalação destrutiva
 
 O uninstall é bloqueado quando existem opções ou votos runtime. A remoção só pode ocorrer após backup verificado e confirmação operacional explícita:
