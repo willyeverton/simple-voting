@@ -51,6 +51,8 @@ lando phpunit-drupal
 lando quality
 ```
 
+O workflow remoto executa os gates estáticos e a suíte Unit. As suítes Kernel/Functional dependem de um site Drupal, banco de teste e URL funcional; por isso, são gates locais obrigatórios antes da entrega, não etapas do workflow remoto atual.
+
 O usuário deve executar `lando quality` para a sequência de código e testes. Com um site Drupal instalado, use também a sequência completa de bootstrap:
 
 ```bash
@@ -89,9 +91,9 @@ export SIMPLETEST_BASE_URL='https://simple-voting.lndo.site'
 vendor/bin/phpunit --configuration=phpunit.drupal.xml.dist
 ```
 
-A concorrência deve ser validada em banco real com dois requests simultâneos para a mesma pergunta/usuário e com um request de voto concorrente a uma alteração administrativa de opções. O resultado esperado é no máximo um voto e nenhuma referência a opção órfã. O lock Drupal usa uma vida útil de 30 segundos e espera entre tentativas; a verificação deve incluir uma operação deliberadamente lenta o suficiente para demonstrar que a proteção permanece ativa durante a transação.
+A concorrência deve ser validada em banco real com dois requests simultâneos para a mesma pergunta/usuário, com um request de voto concorrente a uma alteração administrativa de opções e com uma importação de configuração concorrente. O resultado esperado é no máximo um voto, nenhuma referência a opção órfã e importação serializada pelo gate global. O lock Drupal usa uma vida útil de 30 segundos e espera entre tentativas; a verificação deve incluir uma operação deliberadamente lenta o suficiente para demonstrar que a proteção permanece ativa durante a transação. Importações longas devem ser executadas em janela de manutenção e a política de lease deve ser revisada antes de uso produtivo.
 
-Erros da API retornam `X-Request-ID`. Ao investigar uma falha, associe esse valor aos eventos do canal `simple_voting`. Não registre nem solicite senhas, tokens, payloads completos ou IP bruto durante o diagnóstico.
+Após uma falha deliberada na sincronização de opções, confirme que as linhas de opção voltaram ao estado anterior e que cada `image_fid` possui o uso `simple_voting/voting_option` correspondente; arquivos anexados apenas pela operação falha devem voltar a temporários sem uso do módulo. Erros da API retornam `X-Request-ID`. Ao investigar uma falha, associe esse valor aos eventos do canal `simple_voting`. Não registre nem solicite senhas, tokens, payloads completos ou IP bruto durante o diagnóstico.
 
 ## Tema frontend
 

@@ -89,7 +89,7 @@ Capacidades obrigatórias:
 
 ## 7. Concorrência e performance
 
-A solução deve suportar duplo clique, retries e workers concorrentes. A implementação deve combinar a constraint única do banco com um lock de aplicação por pergunta para voto e mutações administrativas concorrentes. O lock deve ser liberado em `finally` e uma violação de unicidade deve ser tratada como duplicidade de negócio.
+A solução deve suportar duplo clique, retries e workers concorrentes. A implementação deve combinar um gate global para importações de configuração, um lock de aplicação por pergunta para voto e mutações administrativas concorrentes e a constraint única do banco. Os locks devem ser liberados em `finally` e uma violação de unicidade deve ser tratada como duplicidade de negócio.
 
 Os endpoints de leitura devem evitar consultas repetidas e utilizam cache com invalidação específica por pergunta.
 

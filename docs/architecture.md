@@ -110,7 +110,7 @@ web/modules/custom/simple_voting/
 - `VoteStorage`: persiste e consulta votos;
 - `VotingService`: único caminho para registrar voto;
 - `QuestionPersistenceService`: coordena a persistência da pergunta e a sincronização das opções sob lock e transação de banco; operações da File API não possuem rollback transacional automático;
-- `VotingMutationLock`: lock compartilhado por pergunta para voto e mutações administrativas;
+- `VotingMutationLock`: lock global de mutação para importações de configuração e lock compartilhado por pergunta para voto e mutações administrativas;
 - `VotingResultsService`: único cálculo de contagem e percentual;
 - `VotingVisibilityService`: aplica a política de resultados públicos/ocultos;
 - `QuestionDeletionService`: impede remoção com votos;
@@ -133,14 +133,15 @@ A mudança do tema padrão é operacional e reversível por configuração Drupa
 ## 5. Fluxo de administração
 
 1. O administrador acessa uma rota protegida por `administer simple voting`.
-2. `VotingQuestionForm` valida título, machine name, opções e upload.
-3. O formulário pode reconstruir somente o wrapper de opções via AJAX, preservando os valores no `FormState`.
-4. O `ConfigEntityStorage` salva a definição da pergunta.
-5. `OptionStorage` sincroniza as opções em operação controlada.
-6. Opções removidas são bloqueadas quando possuem votos.
-7. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a sincronização da opção e tornam-se permanentes com registro em `file_usage`.
-8. A transação do banco não desfaz automaticamente os efeitos da File API; os fluxos de falha e limpeza tratam essa fronteira explicitamente.
-9. Tags da pergunta e da listagem são invalidadas após a alteração.
+2. As alterações administrativas adquirem o gate global e, quando aplicável, o lock da pergunta.
+3. `VotingQuestionForm` valida título, machine name, opções e upload.
+4. O formulário pode reconstruir somente o wrapper de opções via AJAX, preservando os valores no `FormState`.
+5. O `ConfigEntityStorage` salva a definição da pergunta.
+6. `OptionStorage` sincroniza as opções em operação controlada.
+7. Opções removidas são bloqueadas quando possuem votos.
+8. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a sincronização da opção e tornam-se permanentes com registro em `file_usage`.
+9. A transação do banco não desfaz automaticamente os efeitos da File API; a sincronização mantém um journal de operações e compensa usos anexados/liberados quando a transação falha.
+10. Tags da pergunta e da listagem são invalidadas após a alteração.
 
 A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos não podem ser removidas; devem ser fechadas/arquivadas. Isso preserva auditoria e evita votos órfãos.
 
@@ -149,7 +150,7 @@ A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos
 `VotingService::castVote()` aplica as regras na seguinte ordem:
 
 1. exige UID autenticado;
-2. adquire lock determinístico por pergunta, compartilhado com mutações administrativas;
+2. adquire o gate global e o lock determinístico por pergunta, compartilhado com mutações administrativas;
 3. verifica `voting_enabled`;
 4. carrega a pergunta;
 5. exige status aberto;
@@ -161,12 +162,13 @@ A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos
 11. confirma a transação e invalida cache após sucesso;
 12. libera o lock em `finally`.
 
-A proteção possui duas camadas:
+A proteção possui três camadas:
 
+- **gate global de mutação:** serializa importações de configuração contra votos e mutações administrativas;
 - **lock de aplicação por pergunta:** serializa voto, sincronização de opções e exclusão para evitar que uma opção seja removida entre a validação e a persistência do voto;
 - **constraint de banco:** a chave única continua funcionando em múltiplos workers, hosts ou caminhos alternativos.
 
-O segundo argumento de `LockBackendInterface::acquire()` é a vida útil do lock, não um timeout de espera. `VotingMutationLock` usa uma vida útil de 30 segundos e chama `wait()` entre tentativas não bloqueantes. O limite deve cobrir a operação transacional; caso uma operação administrativa passe a executar trabalho mais longo, a política deve ser revisada ou o lock renovado explicitamente.
+O segundo argumento de `LockBackendInterface::acquire()` é a vida útil do lock, não um timeout de espera. `VotingMutationLock` usa uma vida útil de 30 segundos e chama `wait()` entre tentativas não bloqueantes. O limite deve cobrir a operação transacional e o ciclo de importação; caso uma operação administrativa ou importação passe a executar trabalho mais longo, a política deve ser revisada ou o lock renovado explicitamente.
 
 A Schema API do Drupal não cria foreign keys físicas para tabelas customizadas. Por isso, a integridade entre opções e votos depende do lock compartilhado, das transações e da política de não remover opções que já possuem votos.
 
@@ -280,6 +282,8 @@ A collection Postman é parte do contrato de integração e deve ser atualizada 
 - perguntas são configuração e podem ser promovidas via Configuration Management;
 - identificadores de perguntas não podem ser renomeados durante importação;
 - perguntas com opções ou votos runtime não podem ser removidas durante importação;
+- a importação adquire o gate global de mutação até sua conclusão, bloqueando votos e mutações administrativas concorrentes;
+- se o lock global não estiver disponível, a importação é rejeitada com mensagem operacional segura;
 - opções e votos são dados runtime e não devem ser tratados como configuração deployável;
 - dumps devem excluir credenciais, tokens e dados pessoais desnecessários;
 - `settings.php`, `settings.local.php`, senhas e variáveis de ambiente não entram no Git.
