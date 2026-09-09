@@ -1,14 +1,12 @@
 # Simple Voting — Especificação do sistema
 
-**Status:** especificação vigente para a implementação e validação
-**Fonte:** desafio técnico de Sistema de Votação Simples
-**Escopo atual:** módulo customizado implementado e validado pelo mantenedor em 2026-09-09; esta documentação descreve o comportamento entregue e os critérios que devem ser preservados em futuras alterações.
+Esta documentação descreve o comportamento atual do módulo customizado de votação.
 
 ## 1. Objetivo
 
-Construir um backend Drupal 11 para que administradores cadastrem perguntas com opções de resposta e usuários autenticados votem uma única vez por pergunta, tanto pela interface do Drupal quanto por uma API manual para aplicações externas.
+O sistema é um backend Drupal 11 no qual administradores cadastram perguntas com opções de resposta e usuários autenticados votam uma única vez por pergunta, pela interface do Drupal ou por uma API manual para aplicações externas.
 
-A solução deve ser segura, modular, observável, testável e capaz de preservar a integridade dos votos sob concorrência.
+A solução é modular, observável, testável e preserva a integridade dos votos sob concorrência.
 
 ## 2. Atores
 
@@ -43,7 +41,7 @@ A solução deve ser segura, modular, observável, testável e capaz de preserva
 
 ### 3.3 API manual
 
-A API não deve utilizar JSON:API para a lógica central do desafio. Todos os endpoints exigem autenticação Drupal; leitura, voto e resultados ocultos possuem permissões próprias. O contrato está em [`openapi.yaml`](openapi.yaml).
+A API manual não utiliza JSON:API para a lógica central. Todos os endpoints exigem autenticação Drupal; leitura, voto e resultados ocultos possuem permissões próprias. O contrato está em [`openapi.yaml`](openapi.yaml).
 
 Capacidades obrigatórias:
 
@@ -56,7 +54,7 @@ Capacidades obrigatórias:
 
 1. Perguntas não podem ser representadas por entidades `node`.
 2. O identificador da pergunta é único e não deve mudar depois de publicado ou referenciado pela API.
-3. Uma pergunta disponível pode receber votos somente quando a votação global estiver habilitada; se o lifecycle for adotado, ela também deve estar aberta.
+3. Uma pergunta disponível pode receber votos somente quando a votação global estiver habilitada e ela estiver aberta.
 4. Apenas usuários autenticados e autorizados podem votar.
 5. Uma combinação `(question_id, uid)` pode possuir no máximo um voto.
 6. A opção enviada deve existir e pertencer à pergunta informada.
@@ -93,7 +91,7 @@ Capacidades obrigatórias:
 
 A solução deve suportar duplo clique, retries e workers concorrentes. A implementação deve combinar a constraint única do banco com um lock de aplicação por pergunta para voto e mutações administrativas concorrentes. O lock deve ser liberado em `finally` e uma violação de unicidade deve ser tratada como duplicidade de negócio.
 
-Os endpoints de leitura devem evitar consultas repetidas e podem utilizar cache com invalidação específica por pergunta. A estratégia final deve ser documentada em um ADR e validada por testes de integração.
+Os endpoints de leitura devem evitar consultas repetidas e utilizam cache com invalidação específica por pergunta.
 
 ## 8. Observabilidade
 
@@ -110,7 +108,7 @@ Criar canal de log dedicado para:
 
 Os eventos devem conter contexto operacional seguro, como UID, identificador da pergunta, endpoint e código de resposta.
 
-## 9. Fora do escopo inicial
+## 9. Fora do escopo
 
 - Design visual sofisticado.
 - Aplicação React completa.
@@ -120,35 +118,3 @@ Os eventos devem conter contexto operacional seguro, como UID, identificador da 
 - Mecanismo de votação anônima por IP.
 - Alteração de votos já computados, salvo nova exigência.
 
-## 10. Fatias de implementação
-
-1. Decisão final de entidade e armazenamento.
-2. Schema, permissões e configuração global.
-3. CRUD administrativo de pergunta e opções.
-4. Serviço de votação e integridade transacional.
-5. Interface Drupal de listagem, voto e resultados.
-6. API de leitura.
-7. API de registro e resultados.
-8. Observabilidade e cache.
-9. Testes unitários, Kernel, funcionais e de concorrência.
-10. Postman, documentação e validação final.
-
-## 11. Índice de artefatos de implementação
-
-- [`challenge-brief.md`](challenge-brief.md): fonte literal dos requisitos enviados no desafio.
-- [`functional-requirements.md`](functional-requirements.md): requisitos numerados e decisões de produto.
-- [`domain-model.md`](domain-model.md): agregados, campos, constraints, índices e cache.
-- [`permission-matrix.md`](permission-matrix.md): atores, permissões e fronteiras de acesso.
-- [`flows.md`](flows.md): fluxos CMS, API, resultados e concorrência.
-- [`error-catalog.md`](error-catalog.md): códigos de domínio e respostas HTTP.
-- [`security-threat-model.md`](security-threat-model.md): ameaças e controles.
-- [`test-plan.md`](test-plan.md): estratégia Unit/Kernel/Functional/Integration.
-- [`traceability-matrix.md`](traceability-matrix.md): requisito até evidência.
-- [`operational-readiness.md`](operational-readiness.md): checklist de operação e produção.
-- [`delivery-checklist.md`](delivery-checklist.md): checklist de entrega do desafio.
-- [`decision-log.md`](decision-log.md): resumo das decisões vigentes.
-- [`implementation-plan.md`](implementation-plan.md): fatias verticais de implementação.
-- [`glossary.md`](glossary.md): vocabulário comum do domínio.
-- [`openapi.yaml`](openapi.yaml): contrato da API.
-- [`../postman/simple-voting.postman_collection.json`](../postman/simple-voting.postman_collection.json): collection inicial.
-- [`adr/`](adr/): decisões arquiteturais registradas.

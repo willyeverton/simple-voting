@@ -1,44 +1,41 @@
-# Threat model e controles de segurança
+# Controles de segurança
 
-A tabela abaixo registra as ameaças, controles e evidências validadas na entrega. Os resultados foram confirmados pelo mantenedor em 2026-09-09 e devem ser repetidos em alterações futuras.
+Este documento descreve os controles de segurança presentes no módulo.
 
-## Ativos
+## Dados protegidos
 
 - Integridade da contagem de votos.
-- Identidade e autorização do usuário.
+- Identidade e autorização dos usuários.
 - Configuração das perguntas.
 - Imagens e arquivos enviados.
 - Credenciais e tokens de integração.
 - Logs operacionais.
 
-## Ameaças e controles
+## Controles
 
-| Ameaça | Vetor | Controle obrigatório | Evidência |
-|---|---|---|---|
-| Voto duplicado | Retry/duplo clique/concorrência | Unique constraint + lock/transaction | Teste de integração |
-| Voto em opção de outra pergunta | Manipulação de `option_id` | Query com question_id + option_id | API test |
-| Acesso administrativo indevido | Rota/form/API | Permissions + access checks | Functional test |
-| CSRF | POST por cookie | Header CSRF e proteção de rota | Functional API test |
-| XSS | Título/descrição/imagem | Form API validation + escape/filter | Security test |
-| Upload malicioso | Arquivo executável ou excessivo | Extensão, MIME, tamanho, destino e uso validados no formulário e no storage; arquivos sem uso do diretório do módulo são marcados temporários para limpeza pelo cron | Upload test |
-| Enumeração | IDs e resultados | Respostas consistentes e autorização | API/security test |
-| Vazamento de segredo | Logs/config/CI | Env vars, redaction, revisão de diff | Manual/CI |
-| SQL injection | Payloads de API | DB API/Query Builder e parâmetros | Code review/test |
-| Excesso de carga | Flood de votos/resultados | Índices, agregação, limites/infra rate limit | Load/operational test |
-| Cache indevido | Conteúdo por permissão/usuário | Cache contexts/tags e invalidation | Kernel test |
-| Erro informativo | Stack trace/API | Exception subscriber e mensagens estáveis | API test |
+| Área | Controle |
+|---|---|
+| Voto duplicado | Constraint única por `(question_id, uid)`, lock por pergunta e transação de banco. |
+| Opção incompatível | A opção é validada junto com o identificador da pergunta antes da persistência. |
+| Administração | Permissões Drupal e verificações de acesso protegem rotas, formulários e operações de entidade. |
+| CSRF | Form API protege o CMS e requisições de sessão que alteram estado exigem token CSRF. |
+| XSS | Títulos e descrições passam por validação e são renderizados com saída segura. |
+| Upload | Extensão, tamanho, MIME, destino e uso Drupal do arquivo são verificados. |
+| Enumeração | Respostas e regras de autorização não expõem dados de perguntas ou resultados sem permissão. |
+| Segredos | Credenciais ficam fora do repositório e não são incluídas em logs, respostas ou dumps. |
+| SQL injection | Consultas usam a Database API/Query Builder e parâmetros Drupal. |
+| Excesso de carga | Índices e agregações reduzem consultas desnecessárias; rate limiting pertence à infraestrutura. |
+| Cache | Cache contexts, tags e invalidação consideram usuário, permissões, pergunta e configuração. |
+| Erros | O cliente recebe mensagens estáveis sem SQL, stack trace, tokens ou detalhes internos. |
 
-## Regras de logging
+## Logging
 
-- Registrar UID e question ID somente quando operacionalmente necessário.
-- Nunca registrar senha, Basic Auth, CSRF token ou payload completo.
-- Não retornar identificadores internos do banco sem necessidade.
-- Usar canal `simple_voting` e severidade adequada.
-- Associar exceções inesperadas a um `X-Request-ID` seguro sem expor a exceção ao cliente.
-- Registrar somente a classe da exceção e contexto operacional mínimo; nunca o objeto completo da exceção ou payload bruto.
+- Usar o canal `simple_voting`.
+- Registrar UID e identificador da pergunta somente quando necessário para diagnóstico.
+- Nunca registrar senha, Basic Auth, token CSRF, payload completo, IP bruto ou o objeto completo da exceção.
+- Associar falhas inesperadas a um `X-Request-ID` seguro sem expor detalhes ao cliente.
 
 ## Dependências
 
-- `composer audit` deve ser executado localmente e no CI.
-- Não ignorar advisory para desbloquear instalação sem ADR e revisão explícita.
-- Dependências de produção e desenvolvimento devem permanecer no lock file.
+- Manter dependências de produção e desenvolvimento no lock file.
+- Executar auditoria do Composer sem ignorar advisories ou requisitos de plataforma.

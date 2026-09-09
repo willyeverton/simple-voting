@@ -1,16 +1,10 @@
 # Arquitetura e engenharia — Simple Voting
 
-Este documento explica as decisões de arquitetura do Simple Voting e separa o desenho pretendido do estado atualmente implementado. A especificação funcional continua em [`specification.md`](specification.md); este documento registra responsabilidades, controles presentes no código e limitações que ainda exigem teste ou evolução.
-
-## Estado atual
-
-O módulo implementa o fluxo principal de perguntas, opções, votação, resultados, API manual, permissões, cache e tratamento básico de erros. Em 2026-09-09, o mantenedor confirmou a execução bem-sucedida dos testes Unit, Kernel, Functional, integração, cenários manuais, collection Postman, restauração do dump e verificações de concorrência.
-
-A arquitetura deve ser preservada em futuras alterações: comportamentos de concorrência, restauração, upload, CSRF, limpeza de arquivos e operação fazem parte da validação registrada para a entrega.
+Este documento descreve a arquitetura atual do Simple Voting. A especificação funcional está em [`specification.md`](specification.md).
 
 ## 1. Objetivos de engenharia
 
-O desenho do sistema busca fazer mais do que registrar um voto no caminho feliz. Os objetivos abaixo foram cobertos pela validação executada para a entrega e devem ser preservados em futuras alterações:
+O sistema foi estruturado para:
 
 - impedir votos duplicados mesmo com duplo clique, retry e workers concorrentes;
 - manter a contagem íntegra quando há falhas de banco ou infraestrutura;
@@ -42,7 +36,7 @@ O módulo não delega a lógica central ao JSON:API e não usa entidades `node` 
 
 ### 3.1 Pergunta como Config Entity
 
-`VotingQuestion` usa `ConfigEntityBase` porque a definição administrativa possui machine name estável e precisa ser exportável pelo Configuration Management. A decisão está registrada no [ADR-0001](adr/0001-question-storage.md).
+`VotingQuestion` usa `ConfigEntityBase` para representar a definição administrativa com machine name estável e exportável pelo Configuration Management.
 
 A entidade contém:
 
@@ -55,7 +49,7 @@ A entidade contém:
 
 O identificador deve usar somente letras minúsculas, números e underscore (`_`), sem hífen (`-`), e não deve mudar depois que integrações ou URLs passarem a referenciá-lo. Uma pergunta nova começa fechada para que a criação e a publicação sejam atos administrativos separados.
 
-Essa escolha é adequada enquanto perguntas são configuração relativamente estável. Se o produto exigir revisão editorial, tradução por campo, workflow ou alterações massivas em produção, a fronteira deve ser reavaliada para `ContentEntityBase` em um novo ADR.
+Perguntas são tratadas como configuração relativamente estável; opções e votos permanecem separados como dados operacionais.
 
 ### 3.2 Opções em tabela própria
 
@@ -126,7 +120,7 @@ web/modules/custom/simple_voting/
 
 Controllers, Forms e Block fazem composição e apresentação. Não devem criar regras alternativas nem repetir queries de resultados.
 
-Os controllers, forms, plugins e services usam dependency injection para as regras de negócio. Hooks de instalação/atualização usam as APIs procedurais de ciclo de vida do Drupal; a entidade ainda possui uma chamada estática ao serviço de tempo que deve ser revista em uma evolução futura.
+Controllers, forms, plugins e services usam dependency injection para as regras de negócio. Hooks de instalação e atualização usam as APIs de ciclo de vida do Drupal.
 
 ### Tema global e apresentação
 
@@ -145,7 +139,7 @@ A mudança do tema padrão é operacional e reversível por configuração Drupa
 5. `OptionStorage` sincroniza as opções em operação controlada.
 6. Opções removidas são bloqueadas quando possuem votos.
 7. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a sincronização da opção e tornam-se permanentes com registro em `file_usage`.
-8. A transação do banco não desfaz automaticamente os efeitos da File API. A implementação mantém essa fronteira explícita e o fluxo de falha/limpeza foi validado nos cenários operacionais da entrega.
+8. A transação do banco não desfaz automaticamente os efeitos da File API; os fluxos de falha e limpeza tratam essa fronteira explicitamente.
 9. Tags da pergunta e da listagem são invalidadas após a alteração.
 
 A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos não podem ser removidas; devem ser fechadas/arquivadas. Isso preserva auditoria e evita votos órfãos.
@@ -191,7 +185,7 @@ Nenhum caminho de erro retorna SQL, stack trace, token ou detalhes internos.
 
 ## 7. Lifecycle e discoverability
 
-O projeto diferencia visibilidade histórica de elegibilidade para mutação, conforme o [ADR-0011](adr/0011-question-discoverability.md):
+O projeto diferencia visibilidade histórica de elegibilidade para mutação:
 
 - a listagem da API contém somente perguntas abertas disponíveis para votação quando `voting_enabled` está habilitado; quando desabilitado, retorna catálogo vazio;
 - o detalhe da API pode retornar uma pergunta fechada conhecida com `status: closed`;
@@ -315,26 +309,4 @@ Em incidente, fechar a pergunta é uma contenção segura enquanto a correção 
 
 ## 13. Estratégia de testes
 
-A pirâmide está detalhada em [`docs/test-plan.md`](test-plan.md):
-
-- **Unit:** regras, guards, serialização, visibilidade e exceções;
-- **Kernel:** schema, configuração, queries e cache;
-- **Functional:** rotas, permissões, formulários, autenticação, CSRF e envelopes JSON;
-- **Integração:** constraint real e requests concorrentes no banco.
-
-As configurações Unit, Kernel e Functional estão disponíveis no Lando. O CI executa os gates estáticos e a suíte Unit; as suítes Kernel/Functional e as verificações de integração dependentes de banco foram executadas no ambiente Lando pelo mantenedor. A aceitação da entrega foi concluída com os gates, a verificação de concorrência, a collection/manual plan e a revisão de segurança/arquitetura.
-
-## 14. Evolução além do desafio
-
-Antes de ampliar o volume ou o risco operacional, considerar:
-
-- rate limiting na borda ou serviço dedicado;
-- métricas estruturadas para votos aceitos, duplicados e rejeitados;
-- tracing/correlation ID sem registrar dados sensíveis;
-- estratégia de retenção e backup para votos;
-- índices e particionamento conforme volume real;
-- job assíncrono para agregados pré-calculados somente se a query deixar de atender a latência;
-- migração para entidade de conteúdo se houver tradução, revisão ou workflow editorial;
-- política formal de arquivamento para perguntas antigas.
-
-Essas extensões não devem ser adicionadas prematuramente: primeiro medir o comportamento real e registrar a decisão em novo ADR.
+Os testes do módulo estão organizados nas camadas Unit, Kernel, Functional e integração com banco real. O CI executa os gates estáticos e a suíte Unit; as demais verificações dependem do ambiente Drupal local.

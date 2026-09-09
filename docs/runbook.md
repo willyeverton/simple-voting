@@ -1,10 +1,7 @@
-# Runbook de desenvolvimento
+# Operação local
 
-- Onboarding e instalação: [`../README.md`](../README.md)
-- Arquitetura e decisões de engenharia: [`architecture.md`](architecture.md)
-- Testes manuais: [`manual-test-plan.md`](manual-test-plan.md)
-
-> **Execução exclusiva do usuário:** os comandos abaixo são documentação para o usuário executar. Devin/modelo não deve executar testes, quality gates, auditorias, Drush status, Docker/Lando checks ou qualquer validação de código/ambiente.
+- Instalação e uso: [`../README.md`](../README.md)
+- Arquitetura atual: [`architecture.md`](architecture.md)
 
 ## Ambiente
 
@@ -69,15 +66,6 @@ lando drush status
 lando drush cr
 lando drush updb -y
 ```
-
-## Fluxo recomendado
-
-1. Ler `docs/specification.md` e a matriz de aceitação.
-2. Atualizar ou criar um ADR quando uma decisão arquitetural for tomada.
-3. Implementar uma fatia vertical pequena.
-4. Adicionar testes correspondentes.
-5. O usuário executa `lando quality`.
-6. Revisar `git diff` e verificar que `.devin/`, `AGENTS.md`, secrets, `vendor/` e `web/core/` não foram staged.
 
 ## Diagnóstico
 

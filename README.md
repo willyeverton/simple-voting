@@ -4,16 +4,6 @@ Backend Drupal 11 para o desafio técnico de votação simples. Administradores 
 
 > O projeto é focado em backend, integridade transacional, segurança, observabilidade e qualidade operacional. O tema global Drupal fornece a apresentação do site sem uma aplicação React ou dependências frontend adicionais.
 
-## Estado do projeto
-
-A implementação customizada está em `web/modules/custom/simple_voting`. O repositório contém o módulo, contratos, ADRs, testes iniciais e harness de qualidade.
-
-O estado atual é uma implementação validada do fluxo de votação, com cobertura Unit, Kernel, Functional e integração executada pelo mantenedor. Em 2026-09-09, o mantenedor confirmou que os quality gates, testes Drupal, cenários manuais, collection Postman, restauração do dump e verificações de concorrência passaram com sucesso.
-
-O workflow do GitHub Actions mantém os gates estáticos e a suíte Unit; as validações que dependem de Drupal, banco e ambiente local foram executadas no ambiente Lando conforme documentado.
-
-Para entender as decisões de engenharia, consulte [`docs/architecture.md`](docs/architecture.md). Para comandos operacionais, consulte [`docs/runbook.md`](docs/runbook.md).
-
 ## Requisitos locais
 
 - Docker funcionando;
@@ -73,7 +63,7 @@ Se o site já estiver instalado, pule o instalador e execute apenas a habilitaç
 
 ### Restaurar o dump em ambiente limpo
 
-O dump de demonstração fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Ele foi preparado para uma instalação Drupal nova e contém configuração, `core.extension`, `key_value`, blocos e schemas, sem usuários, sessões, votos, logs, caches ou dados temporários de teste. A restauração em ambiente limpo foi executada e validada pelo mantenedor em 2026-09-09.
+O dump de demonstração fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Ele foi preparado para uma instalação Drupal nova e contém configuração, `core.extension`, `key_value`, blocos e schemas, sem usuários, sessões, votos, logs, caches ou dados temporários de teste.
 
 Use uma cópia separada do projeto e um nome Lando diferente do ambiente de desenvolvimento. Depois da instalação limpa do Drupal, execute **nesta ordem**:
 
@@ -194,7 +184,7 @@ curl --fail-with-body \
   'https://simple-voting.lndo.site/api/v1/questions'
 ```
 
-A especificação está em [`docs/openapi.yaml`](docs/openapi.yaml), e a collection validada está em [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json). O mantenedor confirmou a execução da collection e dos cenários de erro em 2026-09-09.
+A especificação está em [`docs/openapi.yaml`](docs/openapi.yaml), e a collection está em [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json).
 
 ## Executar testes e quality gates
 
@@ -243,7 +233,7 @@ Os testes estão organizados em:
 - `tests/src/Unit`: regras isoladas, visibilidade, serialização e guards do serviço;
 - `tests/src/Kernel`: schema e bootstrap Drupal;
 - `tests/src/Functional`: rotas e acesso HTTP;
-- integração e concorrência real: deve ser executada no banco do ambiente conforme [`docs/test-plan.md`](docs/test-plan.md).
+- integração e concorrência real: executadas no banco do ambiente Drupal.
 
 ### Quality gates
 
@@ -279,30 +269,11 @@ lando drush updb -y
 lando drush cr
 ```
 
-### Validações concluídas
-
-Os itens abaixo foram executados e passaram conforme confirmação do mantenedor em 2026-09-09:
-
-- schema das tabelas `simple_voting_option` e `simple_voting_vote` instalado;
-- unique constraint `(question_id, uid)` validada sob requests concorrentes;
-- anônimo recebe `401` na API sem dados de negócio;
-- voto repetido retorna `409`;
-- opção pertencente a outra pergunta retorna `422`;
-- pergunta fechada retorna `422`;
-- votação global desabilitada retorna `503`;
-- resultado oculto sem permissão retorna `403`;
-- CMS, bloco e API apresentam os mesmos totais e percentuais;
-- nenhum IP bruto é persistido;
-- nenhum secret aparece em logs, respostas, commits ou dumps;
-- nenhum arquivo em `web/core`, contrib ou `vendor` foi alterado.
-
-A matriz de aceitação e o plano manual registram os cenários validados e devem ser atualizados junto com futuras alterações de comportamento.
-
 ## Estrutura do projeto
 
 ```text
 .
-├── docs/                         # Especificação, ADRs, contratos e operação
+├── docs/                         # Especificação, contratos e operação
 ├── postman/                      # Collection da API
 ├── scripts/                      # Scripts Lando/CI de qualidade
 ├── web/
@@ -318,35 +289,20 @@ A matriz de aceitação e o plano manual registram os cenários validados e deve
 
 ## Documentação
 
-- [`docs/specification.md`](docs/specification.md): escopo e regras do sistema;
-- [`docs/architecture.md`](docs/architecture.md): arquitetura implementada e limitações conhecidas;
+- [`docs/specification.md`](docs/specification.md): comportamento e regras do sistema;
+- [`docs/architecture.md`](docs/architecture.md): componentes e responsabilidades;
 - [`docs/openapi.yaml`](docs/openapi.yaml): contrato da API;
-- [`docs/permission-matrix.md`](docs/permission-matrix.md): autorização;
-- [`docs/domain-model.md`](docs/domain-model.md): agregados, tabelas, índices e cache;
-- [`docs/security-threat-model.md`](docs/security-threat-model.md): ameaças e controles;
-- [`docs/test-plan.md`](docs/test-plan.md): estratégia e gates de teste;
-- [`docs/manual-test-plan.md`](docs/manual-test-plan.md): roteiro manual de CMS, API e bloco;
-- [`docs/runbook.md`](docs/runbook.md): operação local e diagnóstico;
-- [`docs/acceptance-matrix.md`](docs/acceptance-matrix.md): evidências de aceitação;
-- [`docs/delivery-checklist.md`](docs/delivery-checklist.md): prontidão de entrega;
-- [`docs/adr/`](docs/adr/): decisões arquiteturais registradas.
+- [`docs/permission-matrix.md`](docs/permission-matrix.md): autorização e permissões;
+- [`docs/domain-model.md`](docs/domain-model.md): entidades, tabelas, índices e cache;
+- [`docs/security-threat-model.md`](docs/security-threat-model.md): controles de segurança;
+- [`docs/error-catalog.md`](docs/error-catalog.md): códigos e respostas de erro;
+- [`docs/runbook.md`](docs/runbook.md): operação local;
+- [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json): collection da API.
 
 ## Operação e limites conhecidos
 
 - votos são imutáveis e perguntas com votos não devem ser apagadas;
-- rate limiting não faz parte do módulo inicial e deve ser fornecido pela infraestrutura;
+- rate limiting é responsabilidade da infraestrutura;
 - IP bruto não é persistido;
-- alterações destrutivas de schema exigem backup, update hook e revisão;
-- o dump de demonstração, quando criado, não deve conter credenciais nem dados pessoais;
-- os gates locais e o CI são evidência necessária, não apenas documentação.
-
-## Contribuição
-
-Antes de alterar o módulo:
-
-1. leia a especificação e a matriz de aceitação;
-2. atualize ou crie um ADR quando a decisão mudar comportamento;
-3. mantenha código em módulos/temas customizados;
-4. adicione testes para o caminho feliz e falhas relevantes;
-5. execute os gates definidos para o tipo de mudança;
-6. revise o diff para garantir que core, contrib, vendor, secrets e arquivos locais não foram incluídos.
+- alterações destrutivas de schema exigem backup e update hook;
+- o dump de demonstração não deve conter credenciais nem dados pessoais.
