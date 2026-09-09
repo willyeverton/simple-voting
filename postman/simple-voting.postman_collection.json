@@ -11,7 +11,7 @@
     },
     {
       "key": "question_id",
-      "value": "pergunta-exemplo"
+      "value": "pergunta_exemplo"
     },
     {
       "key": "option_id",
@@ -40,6 +40,18 @@
   "item": [
     {
       "name": "List questions",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Response contains data array', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "GET",
         "header": [],
@@ -52,6 +64,18 @@
     },
     {
       "name": "Get question",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Question contains options', function () { pm.expect(pm.response.json().data.options).to.be.an('array'); });"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "GET",
         "header": [],
@@ -64,6 +88,18 @@
     },
     {
       "name": "Create vote",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
+              "pm.test('Response contains message', function () { pm.expect(pm.response.json().message).to.be.a('string'); });"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "POST",
         "header": [
@@ -95,6 +131,18 @@
     },
     {
       "name": "Get results",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
+              "pm.test('Results contain totals', function () { pm.expect(pm.response.json().data.total_votes).to.be.a('number'); });"
+            ]
+          }
+        }
+      ],
       "request": {
         "method": "GET",
         "header": [],
