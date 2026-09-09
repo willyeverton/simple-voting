@@ -258,6 +258,14 @@ function simple_voting_update_11005(): void {
 }
 
 /**
+ * Reconciles the global frontend theme blocks after configuration restoration.
+ */
+function simple_voting_update_11006(): void {
+  simple_voting_set_default_theme();
+  simple_voting_ensure_theme_blocks();
+}
+
+/**
  * Implements hook_uninstall().
  */
 function simple_voting_uninstall(): void {

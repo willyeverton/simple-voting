@@ -1,10 +1,9 @@
 <header class="sv-site-header" role="banner">
   <div class="sv-container sv-site-header__inner">
     <div class="sv-header-branding">
+      <a class="sv-site-name" href="{{ front_page }}" rel="home">{{ site_name }}</a>
       {% if page.header %}
         {{ page.header }}
-      {% else %}
-        <a class="sv-site-name" href="{{ front_page }}" rel="home">{{ site_name }}</a>
       {% endif %}
     </div>
     <div class="sv-header-navigation">

@@ -67,6 +67,38 @@ lando drush cr
 
 Se o site já estiver instalado, pule o instalador e execute apenas a habilitação/atualização do módulo.
 
+### Restaurar o dump em ambiente limpo
+
+O dump de demonstração fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Ele preserva o estado estrutural e operacional necessário para o bootstrap, incluindo configuração, `core.extension`, `key_value`, blocos e schemas. Dados de usuários, sessões, votos, logs, caches e tabelas temporárias de teste não são transportados; tabelas voláteis permanecem apenas com sua estrutura. A restauração deve ser feita sobre uma instalação Drupal nova.
+
+Use uma cópia separada do projeto e um nome Lando diferente do ambiente de desenvolvimento. Depois da instalação limpa do Drupal, execute **nesta ordem**:
+
+```bash
+lando drush en block -y
+lando db-import dump/simple-voting-demo.sql
+lando drush updb -y
+lando drush cr
+```
+
+O dump preserva o estado de módulos/configuração do ambiente de demonstração e contém uma definição vazia de `simple_voting_vote`, sem registros de votos. Depois do import, crie um administrador local, pois dados de usuários não são transportados:
+
+```bash
+read -r -s DEMO_PASSWORD
+lando drush user:create demo_admin --mail=demo@example.invalid --password="$DEMO_PASSWORD"
+lando drush user:role:add administrator demo_admin
+unset DEMO_PASSWORD
+```
+
+Confirme também os dados demonstrativos:
+
+```bash
+lando drush sql:query "SELECT COUNT(*) AS questions FROM config WHERE name LIKE 'simple_voting.question.%';"
+lando drush sql:query "SELECT COUNT(*) AS options FROM simple_voting_option;"
+lando drush sql:query "SELECT COUNT(*) AS votes FROM simple_voting_vote;"
+```
+
+O resultado esperado para o dump atual é `3` perguntas, `6` opções e `0` votos. Se `simple_voting_vote` não existir depois do import, interrompa o procedimento e não prossiga com um banco parcialmente restaurado.
+
 O uninstall do módulo é bloqueado quando existem opções ou votos. Uma remoção destrutiva exige backup verificado e confirmação operacional explícita por meio do procedimento documentado em [`docs/runbook.md`](docs/runbook.md).
 
 Ao instalar o módulo em um site novo, ou ao aplicar `updb` em um site existente, o tema `simple_voting_theme` é instalado e definido como tema frontend padrão. O tema administrativo configurado não é alterado.

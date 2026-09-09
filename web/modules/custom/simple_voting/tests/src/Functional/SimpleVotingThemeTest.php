@@ -61,6 +61,18 @@ final class SimpleVotingThemeTest extends BrowserTestBase {
   }
 
   /**
+   * Configuration restoration can recreate the global theme blocks.
+   */
+  public function testThemeUpdateReconcilesGlobalBlocks(): void {
+    \simple_voting_update_11006();
+    $storage = \Drupal::entityTypeManager()->getStorage('block');
+
+    foreach (['main_menu', 'account_menu', 'messages', 'page_title'] as $block) {
+      self::assertNotNull($storage->load('simple_voting_theme_' . $block));
+    }
+  }
+
+  /**
    * The theme update preserves the configured administrative theme.
    */
   public function testThemeUpdatePreservesAdminTheme(): void {

@@ -118,14 +118,18 @@ Confirme antes que o tema anterior continua instalado e que a troca não interfe
 
 ## Dump de demonstração
 
-O arquivo `../dump/simple-voting-demo.sql` contém um dump ordenado do ambiente Drupal com as tabelas de configuração e do módulo necessárias para demonstrar perguntas e opções. Para evitar transportar dados pessoais ou credenciais locais, o dump exclui usuários, sessões, votos, logs, caches e tabelas temporárias de teste; o e-mail administrativo foi normalizado para um domínio reservado.
+O arquivo `../dump/simple-voting-demo.sql` contém um snapshot ordenado do ambiente Drupal com configuração, `core.extension`, `key_value`, blocos e schemas necessários para o bootstrap. Para evitar transportar dados pessoais ou credenciais locais, o dump não transporta usuários, sessões, registros de votos, logs, caches nem dados de tabelas temporárias de teste; tabelas voláteis ficam apenas com sua estrutura. O e-mail administrativo foi normalizado para um domínio reservado e a definição vazia de `simple_voting_vote` preserva o schema sem transportar identidades ou votos.
 
-A restauração ainda deve ser validada somente em ambiente limpo. Não importe este arquivo em um banco existente sem backup verificado:
+A restauração deve ser validada somente em um ambiente limpo com o Drupal base instalado. Não importe este arquivo em um banco existente sem backup verificado:
 
 ```bash
+lando drush en block -y
 lando db-import dump/simple-voting-demo.sql
+lando drush updb -y
 lando drush cr
 ```
+
+Como os usuários não são transportados, crie uma conta administrativa local após o import. A tabela `simple_voting_vote` deve existir e permanecer vazia após a restauração.
 
 O dump é um artefato de banco; arquivos binários enviados não são substituídos por ele. Após a restauração, confirme que as opções continuam acessíveis e que imagens locais, quando usadas, foram fornecidas separadamente ou removidas do cenário de demonstração.
 
