@@ -8,7 +8,10 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\simple_voting\Entity\VotingQuestionInterface;
 use Drupal\simple_voting\Exception\InvalidOptionException;
 use Drupal\simple_voting\Exception\OptionInUseException;
+use Drupal\simple_voting\Exception\PersistenceFailureException;
+use Drupal\simple_voting\Exception\VoteLockUnavailableException;
 use Drupal\simple_voting\Service\OptionStorage;
+use Drupal\simple_voting\Service\QuestionPersistenceService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -16,13 +19,19 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 final class VotingQuestionForm extends EntityForm {
 
-  public function __construct(protected readonly OptionStorage $optionStorage) {}
+  public function __construct(
+    protected readonly OptionStorage $optionStorage,
+    protected readonly QuestionPersistenceService $questionPersistence,
+  ) {}
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container): static {
-    return new static($container->get('simple_voting.option_storage'));
+    return new static(
+      $container->get('simple_voting.option_storage'),
+      $container->get('simple_voting.question_persistence'),
+    );
   }
 
   /**
@@ -203,8 +212,34 @@ final class VotingQuestionForm extends EntityForm {
   public function save(array $form, FormStateInterface $form_state): int {
     /** @var \Drupal\simple_voting\Entity\VotingQuestionInterface $question */
     $question = $this->entity;
-    $status = $question->save();
-    $this->optionStorage->sync($question->id(), $this->submittedOptions($form_state));
+    $isNew = $question->isNew();
+    try {
+      $status = $this->questionPersistence->save(
+        $question,
+        $this->submittedOptions($form_state),
+      );
+    }
+    catch (OptionInUseException) {
+      $this->messenger()->addError($this->t('An option with votes cannot be removed. Close the question instead.'));
+      $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
+      return SAVED_UPDATED;
+    }
+    catch (InvalidOptionException) {
+      $this->messenger()->addError($this->t('One of the submitted options is invalid.'));
+      $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
+      return SAVED_UPDATED;
+    }
+    catch (VoteLockUnavailableException) {
+      $this->messenger()->addError($this->t('The question could not be saved now. Please try again shortly.'));
+      $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
+      return SAVED_UPDATED;
+    }
+    catch (PersistenceFailureException) {
+      $this->messenger()->addError($this->t('The question could not be saved. Please try again.'));
+      $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
+      return SAVED_UPDATED;
+    }
+
     $this->messenger()->addStatus($status === SAVED_NEW
       ? $this->t('Question %label was created.', ['%label' => $question->label()])
       : $this->t('Question %label was updated.', ['%label' => $question->label()]));

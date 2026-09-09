@@ -6,6 +6,8 @@ use Drupal\Core\Entity\EntityConfirmFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\simple_voting\Exception\QuestionHasVotesException;
+use Drupal\simple_voting\Exception\PersistenceFailureException;
+use Drupal\simple_voting\Exception\VoteLockUnavailableException;
 use Drupal\simple_voting\Service\QuestionDeletionService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
@@ -54,6 +56,14 @@ final class VotingQuestionDeleteForm extends EntityConfirmFormBase {
         'Questions with votes must be closed or archived instead of deleted.',
         $exception,
       );
+    }
+    catch (VoteLockUnavailableException) {
+      $this->messenger()->addError($this->t('The question could not be deleted now. Please try again shortly.'));
+      return;
+    }
+    catch (PersistenceFailureException) {
+      $this->messenger()->addError($this->t('The question could not be deleted. Please try again.'));
+      return;
     }
     $this->messenger()->addStatus($this->t('Question %label was deleted.', [
       '%label' => $question->label(),

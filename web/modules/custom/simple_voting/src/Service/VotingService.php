@@ -6,7 +6,6 @@ use Drupal\Core\Cache\CacheTagsInvalidatorInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\IntegrityConstraintViolationException;
-use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\simple_voting\Exception\DuplicateVoteException;
 use Drupal\simple_voting\Exception\InvalidOptionException;
@@ -27,7 +26,7 @@ class VotingService {
     private readonly QuestionReadService $questionRead,
     private readonly OptionStorage $optionStorage,
     private readonly VoteStorage $voteStorage,
-    private readonly LockBackendInterface $lock,
+    private readonly VotingMutationLock $mutationLock,
     private readonly TimeInterface $time,
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
     private readonly LoggerInterface $logger,
@@ -44,52 +43,44 @@ class VotingService {
       throw new \InvalidArgumentException('A vote requires an authenticated user.');
     }
 
-    if (!(bool) $this->configFactory->get('simple_voting.settings')->get('voting_enabled')) {
-      $this->logger->notice('Vote blocked because global voting is disabled.', [
-        'uid' => $uid,
-        'question_id' => $questionId,
-      ]);
-      throw new VotingDisabledException();
+    try {
+      $this->mutationLock->acquire($questionId);
     }
-
-    $question = $this->questionRead->requireQuestion($questionId);
-    if (!$question->isOpen()) {
-      $this->logger->notice('Vote blocked because the question is closed.', [
-        'uid' => $uid,
-        'question_id' => $questionId,
-      ]);
-      throw new QuestionClosedException();
-    }
-
-    if ($this->optionStorage->getOption($questionId, $optionId) === NULL) {
-      $this->logger->warning('Vote blocked because the option does not belong to the question.', [
-        'uid' => $uid,
-        'question_id' => $questionId,
-        'option_id' => $optionId,
-      ]);
-      throw new InvalidOptionException();
-    }
-
-    $lockKey = 'simple_voting.vote.' . hash('sha256', $questionId . ':' . $uid);
-    $acquired = FALSE;
-    $attempts = 2;
-    $timeout = 1.0;
-    for ($attempt = 0; $attempt < max(1, $attempts); $attempt++) {
-      if ($this->lock->acquire($lockKey, $timeout)) {
-        $acquired = TRUE;
-        break;
-      }
-    }
-
-    if (!$acquired) {
+    catch (VoteLockUnavailableException $exception) {
       $this->logger->warning('Vote lock unavailable.', [
         'uid' => $uid,
         'question_id' => $questionId,
       ]);
-      throw new VoteLockUnavailableException();
+      throw $exception;
     }
 
     try {
+      if (!(bool) $this->configFactory->get('simple_voting.settings')->get('voting_enabled')) {
+        $this->logger->notice('Vote blocked because global voting is disabled.', [
+          'uid' => $uid,
+          'question_id' => $questionId,
+        ]);
+        throw new VotingDisabledException();
+      }
+
+      $question = $this->questionRead->requireQuestion($questionId);
+      if (!$question->isOpen()) {
+        $this->logger->notice('Vote blocked because the question is closed.', [
+          'uid' => $uid,
+          'question_id' => $questionId,
+        ]);
+        throw new QuestionClosedException();
+      }
+
+      if ($this->optionStorage->getOption($questionId, $optionId) === NULL) {
+        $this->logger->warning('Vote blocked because the option does not belong to the question.', [
+          'uid' => $uid,
+          'question_id' => $questionId,
+          'option_id' => $optionId,
+        ]);
+        throw new InvalidOptionException();
+      }
+
       $transaction = $this->database->startTransaction();
       try {
         if ($this->voteStorage->hasVote($questionId, $uid)) {
@@ -113,26 +104,37 @@ class VotingService {
       }
       catch (IntegrityConstraintViolationException $exception) {
         $transaction->rollBack();
-        $this->logger->notice('Vote uniqueness constraint rejected a duplicate.', [
+        if ($this->voteStorage->hasVote($questionId, $uid)) {
+          $this->logger->notice('Vote uniqueness constraint rejected a duplicate.', [
+            'uid' => $uid,
+            'question_id' => $questionId,
+          ]);
+          throw new DuplicateVoteException(previous: $exception);
+        }
+
+        $this->logger->error('Vote persistence constraint failed.', [
           'uid' => $uid,
           'question_id' => $questionId,
+          'exception_class' => $exception::class,
         ]);
-        throw new DuplicateVoteException(previous: $exception);
+        throw new PersistenceFailureException(previous: $exception);
       }
       catch (\Throwable $exception) {
         $transaction->rollBack();
         $this->logger->error('Unexpected vote persistence failure.', [
           'uid' => $uid,
           'question_id' => $questionId,
-          'exception' => $exception,
+          'exception_class' => $exception::class,
         ]);
         throw new PersistenceFailureException(previous: $exception);
       }
 
+      unset($transaction);
       $this->cacheTagsInvalidator->invalidateTags([
         'config:simple_voting.question.' . $questionId,
         'simple_voting:question:' . $questionId,
         'simple_voting:question-list',
+        'config:voting_question_list',
       ]);
 
       return [
@@ -142,7 +144,7 @@ class VotingService {
       ];
     }
     finally {
-      $this->lock->release($lockKey);
+      $this->mutationLock->release($questionId);
     }
   }
 

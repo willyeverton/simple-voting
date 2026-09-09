@@ -13,6 +13,7 @@ use Drupal\simple_voting\Exception\VotingDisabledException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -47,30 +48,50 @@ final class VotingApiExceptionSubscriber implements EventSubscriberInterface {
 
     $exception = $event->getThrowable();
     [$status, $code, $message] = $this->mapException($exception);
-    $headers = [];
+    $correlationId = $this->getCorrelationId($request);
+    $headers = [
+      'X-Request-ID' => $correlationId,
+    ];
+    if ($exception instanceof UnauthorizedHttpException) {
+      $headers['WWW-Authenticate'] = $exception->getHeaders()['WWW-Authenticate']
+        ?? 'Basic realm="Simple Voting"';
+    }
     if ($exception instanceof VoteLockUnavailableException) {
       $headers['Retry-After'] = '2';
     }
 
+    $logContext = [
+      'route' => $route,
+      'status' => $status,
+      'code' => $code,
+      'correlation_id' => $correlationId,
+      'exception_class' => $exception::class,
+    ];
     if ($status >= 500) {
-      $this->logger->error('Unhandled Simple Voting API exception.', [
-        'route' => $route,
-        'status' => $status,
-        'exception' => $exception,
-      ]);
+      $this->logger->error('Unhandled Simple Voting API exception.', $logContext);
     }
     else {
-      $this->logger->notice('Simple Voting API request rejected.', [
-        'route' => $route,
-        'status' => $status,
-        'code' => $code,
-      ]);
+      $this->logger->notice('Simple Voting API request rejected.', $logContext);
     }
 
-    $event->setResponse(new JsonResponse([
+    $response = new JsonResponse([
       'error' => $message,
       'code' => $code,
-    ], $status, $headers));
+    ], $status, $headers);
+    $response->headers->set('Cache-Control', 'private, no-store');
+    $event->setResponse($response);
+  }
+
+  /**
+   * Returns a bounded correlation identifier for operational logs.
+   */
+  private function getCorrelationId(Request $request): string {
+    $provided = trim((string) $request->headers->get('X-Request-ID', ''));
+    if (preg_match('/\\A[A-Za-z0-9._-]{1,64}\\z/', $provided) === 1) {
+      return $provided;
+    }
+
+    return bin2hex(random_bytes(16));
   }
 
   /**

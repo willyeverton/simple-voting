@@ -33,7 +33,15 @@ final class VotingApiSerializer {
    */
   public function question(VotingQuestionInterface $question, array $options): array {
     $data = $this->questionSummary($question);
-    $data['options'] = array_map(function (array $option): array {
+    $fileIds = array_values(array_filter(array_map(
+      static fn (array $option): ?int => !empty($option['image_fid']) ? (int) $option['image_fid'] : NULL,
+      $options,
+    )));
+    $files = $fileIds
+      ? $this->entityTypeManager->getStorage('file')->loadMultiple($fileIds)
+      : [];
+
+    $data['options'] = array_map(function (array $option) use ($files): array {
       $item = [
         'id' => (int) $option['id'],
         'title' => (string) $option['title'],
@@ -41,11 +49,10 @@ final class VotingApiSerializer {
       if ((string) ($option['description'] ?? '') !== '') {
         $item['description'] = (string) $option['description'];
       }
-      if (!empty($option['image_fid'])) {
-        $file = $this->entityTypeManager->getStorage('file')->load((int) $option['image_fid']);
-        if ($file !== NULL) {
-          $item['image_url'] = $this->fileUrlGenerator->generateString($file->getFileUri());
-        }
+      if (!empty($option['image_fid']) && isset($files[(int) $option['image_fid']])) {
+        $item['image_url'] = $this->fileUrlGenerator->generateString(
+          $files[(int) $option['image_fid']]->getFileUri(),
+        );
       }
       return $item;
     }, $options);

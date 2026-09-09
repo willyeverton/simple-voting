@@ -6,6 +6,7 @@ use Drupal\Core\Cache\CacheTagsInvalidatorInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\file\FileInterface;
 use Drupal\file\FileUsage\FileUsageInterface;
 use Drupal\simple_voting\Exception\InvalidOptionException;
 use Drupal\simple_voting\Exception\OptionInUseException;
@@ -15,11 +16,29 @@ use Drupal\simple_voting\Exception\OptionInUseException;
  */
 class OptionStorage {
 
+  private const IMAGE_DIRECTORY = 'public://simple_voting/options/';
+
+  private const ALLOWED_IMAGE_MIME_TYPES = [
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+  ];
+
+  private const ALLOWED_IMAGE_EXTENSIONS = [
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'webp',
+  ];
+
   public function __construct(
     private readonly Connection $database,
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly FileUsageInterface $fileUsage,
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
+    private readonly VotingMutationLock $mutationLock,
   ) {}
 
   /**
@@ -90,112 +109,166 @@ class OptionStorage {
    *   The question machine name.
    * @param array<int, array<string, mixed>> $submitted
    *   Option values with optional id and image_fid keys.
+   * @param bool $lockHeld
+   *   Whether the caller already owns the question mutation lock.
+   * @param bool $invalidate
+   *   Whether to invalidate question cache tags after synchronization.
    */
-  public function sync(string $questionId, array $submitted): void {
-    $normalized = [];
-    foreach (array_values($submitted) as $weight => $option) {
-      $title = trim((string) ($option['title'] ?? ''));
-      if ($title === '') {
-        continue;
-      }
-
-      $normalized[] = [
-        'id' => !empty($option['id']) ? (int) $option['id'] : NULL,
-        'title' => $title,
-        'description' => trim((string) ($option['description'] ?? '')),
-        'image_fid' => !empty($option['image_fid']) ? (int) $option['image_fid'] : NULL,
-        'weight' => $weight,
-      ];
+  public function sync(string $questionId, array $submitted, bool $lockHeld = FALSE, bool $invalidate = TRUE): void {
+    $acquired = !$lockHeld;
+    if ($acquired) {
+      $this->mutationLock->acquire($questionId);
     }
 
-    if (!$normalized) {
-      throw new InvalidOptionException();
-    }
-
-    $existing = $this->getOptions($questionId);
-    $existingById = [];
-    foreach ($existing as $option) {
-      $existingById[(int) $option['id']] = $option;
-    }
-
-    foreach ($normalized as $option) {
-      if ($option['id'] !== NULL && !isset($existingById[$option['id']])) {
-        throw new InvalidOptionException();
-      }
-    }
-
-    $submittedIds = array_filter(array_column($normalized, 'id'));
-    foreach ($existingById as $id => $oldOption) {
-      if (!in_array($id, $submittedIds, TRUE) && $this->hasVotesForOption($id)) {
-        throw new OptionInUseException();
-      }
-    }
-
-    $transaction = $this->database->startTransaction();
     try {
-      foreach ($existingById as $id => $oldOption) {
-        if (in_array($id, $submittedIds, TRUE)) {
+      $normalized = [];
+      foreach (array_values($submitted) as $weight => $option) {
+        $title = trim((string) ($option['title'] ?? ''));
+        if ($title === '') {
           continue;
         }
-        $this->releaseFile($oldOption['image_fid'], $id);
-        $this->database->delete('simple_voting_option')
-          ->condition('id', $id)
-          ->execute();
+
+        $normalized[] = [
+          'id' => !empty($option['id']) ? (int) $option['id'] : NULL,
+          'title' => $title,
+          'description' => trim((string) ($option['description'] ?? '')),
+          'image_fid' => !empty($option['image_fid']) ? (int) $option['image_fid'] : NULL,
+          'weight' => $weight,
+        ];
+      }
+
+      if (!$normalized) {
+        throw new InvalidOptionException();
+      }
+
+      $existing = $this->getOptions($questionId);
+      $existingById = [];
+      foreach ($existing as $option) {
+        $existingById[(int) $option['id']] = $option;
       }
 
       foreach ($normalized as $option) {
-        if ($option['id'] !== NULL) {
-          $oldOption = $existingById[$option['id']];
-          $this->database->update('simple_voting_option')
-            ->fields([
-              'title' => $option['title'],
-              'description' => $option['description'],
-              'image_fid' => $option['image_fid'],
-              'weight' => $option['weight'],
-            ])
-            ->condition('id', $option['id'])
-            ->condition('question_id', $questionId)
-            ->execute();
-          $this->syncFileUsage(
-            $oldOption['image_fid'],
-            $option['image_fid'],
-            $option['id'],
-          );
-        }
-        else {
-          $optionId = (int) $this->database->insert('simple_voting_option')
-            ->fields([
-              'question_id' => $questionId,
-              'title' => $option['title'],
-              'description' => $option['description'],
-              'image_fid' => $option['image_fid'],
-              'weight' => $option['weight'],
-            ])
-            ->execute();
-          $this->attachFile($option['image_fid'], $optionId);
+        if ($option['id'] !== NULL && !isset($existingById[$option['id']])) {
+          throw new InvalidOptionException();
         }
       }
-    }
-    catch (\Throwable $exception) {
-      $transaction->rollBack();
-      throw $exception;
-    }
 
-    $this->invalidateQuestion($questionId);
+      $submittedIds = array_values(array_filter(array_column($normalized, 'id')));
+      if (count($submittedIds) !== count(array_unique($submittedIds))) {
+        throw new InvalidOptionException();
+      }
+
+      foreach ($normalized as $option) {
+        if (!$option['image_fid']) {
+          continue;
+        }
+        $oldImageFid = $option['id'] !== NULL
+          ? (int) ($existingById[$option['id']]['image_fid'] ?? 0)
+          : 0;
+        if ($oldImageFid !== (int) $option['image_fid']) {
+          $this->loadValidatedUploadFile((int) $option['image_fid']);
+        }
+      }
+
+      foreach ($existingById as $id => $oldOption) {
+        if (!in_array($id, $submittedIds, TRUE) && $this->hasVotesForOption($id)) {
+          throw new OptionInUseException();
+        }
+      }
+
+      $transaction = $this->database->startTransaction();
+      try {
+        foreach ($existingById as $id => $oldOption) {
+          if (in_array($id, $submittedIds, TRUE)) {
+            continue;
+          }
+          $this->releaseFile($oldOption['image_fid'], $id);
+          $this->database->delete('simple_voting_option')
+            ->condition('id', $id)
+            ->execute();
+        }
+
+        foreach ($normalized as $option) {
+          if ($option['id'] !== NULL) {
+            $oldOption = $existingById[$option['id']];
+            $this->database->update('simple_voting_option')
+              ->fields([
+                'title' => $option['title'],
+                'description' => $option['description'],
+                'image_fid' => $option['image_fid'],
+                'weight' => $option['weight'],
+              ])
+              ->condition('id', $option['id'])
+              ->condition('question_id', $questionId)
+              ->execute();
+            $this->syncFileUsage(
+              $oldOption['image_fid'],
+              $option['image_fid'],
+              $option['id'],
+            );
+          }
+          else {
+            $optionId = (int) $this->database->insert('simple_voting_option')
+              ->fields([
+                'question_id' => $questionId,
+                'title' => $option['title'],
+                'description' => $option['description'],
+                'image_fid' => $option['image_fid'],
+                'weight' => $option['weight'],
+              ])
+              ->execute();
+            $this->attachFile($option['image_fid'], $optionId);
+          }
+        }
+      }
+      catch (\Throwable $exception) {
+        $transaction->rollBack();
+        throw $exception;
+      }
+
+      unset($transaction);
+      if ($invalidate) {
+        $this->invalidateQuestion($questionId);
+      }
+    }
+    finally {
+      if ($acquired) {
+        $this->mutationLock->release($questionId);
+      }
+    }
   }
 
   /**
    * Deletes all options for a question after the caller checked vote policy.
+   *
+   * @param string $questionId
+   *   The question machine name.
+   * @param bool $lockHeld
+   *   Whether the caller already owns the question mutation lock.
    */
-  public function deleteForQuestion(string $questionId): void {
-    $options = $this->getOptions($questionId);
-    foreach ($options as $option) {
-      $this->releaseFile($option['image_fid'], (int) $option['id']);
+  public function deleteForQuestion(string $questionId, bool $lockHeld = FALSE): void {
+    $acquired = !$lockHeld;
+    if ($acquired) {
+      $this->mutationLock->acquire($questionId);
     }
-    $this->database->delete('simple_voting_option')
-      ->condition('question_id', $questionId)
-      ->execute();
-    $this->invalidateQuestion($questionId);
+
+    try {
+      $options = $this->getOptions($questionId);
+      foreach ($options as $option) {
+        $this->releaseFile($option['image_fid'], (int) $option['id']);
+      }
+      $this->database->delete('simple_voting_option')
+        ->condition('question_id', $questionId)
+        ->execute();
+      if (!$lockHeld) {
+        $this->invalidateQuestion($questionId);
+      }
+    }
+    finally {
+      if ($acquired) {
+        $this->mutationLock->release($questionId);
+      }
+    }
   }
 
   /**
@@ -206,6 +279,7 @@ class OptionStorage {
       'config:simple_voting.question.' . $questionId,
       'simple_voting:question:' . $questionId,
       'simple_voting:question-list',
+      'config:voting_question_list',
     ]);
   }
 
@@ -228,8 +302,31 @@ class OptionStorage {
     if ((int) $oldFid === (int) $newFid) {
       return;
     }
-    $this->releaseFile($oldFid, $optionId);
     $this->attachFile($newFid, $optionId);
+    try {
+      $this->releaseFile($oldFid, $optionId);
+    }
+    catch (\Throwable $exception) {
+      $this->releaseFile($newFid, $optionId);
+      throw $exception;
+    }
+  }
+
+  /**
+   * Loads and validates a temporary option image upload.
+   */
+  private function loadValidatedUploadFile(int $fid): FileInterface {
+    $file = $this->entityTypeManager->getStorage('file')->load($fid);
+    if (!$file instanceof FileInterface
+      || $file->isTemporary() === FALSE
+      || $file->getSize() > 2 * 1024 * 1024
+      || !in_array($file->getMimeType(), self::ALLOWED_IMAGE_MIME_TYPES, TRUE)
+      || !str_starts_with($file->getFileUri(), self::IMAGE_DIRECTORY)
+      || !in_array(strtolower(pathinfo($file->getFileUri(), PATHINFO_EXTENSION)), self::ALLOWED_IMAGE_EXTENSIONS, TRUE)) {
+      throw new InvalidOptionException();
+    }
+
+    return $file;
   }
 
   /**
@@ -239,17 +336,17 @@ class OptionStorage {
     if (!$fid) {
       return;
     }
-    $file = $this->entityTypeManager->getStorage('file')->load($fid);
-    $allowedMimeTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-    if ($file === NULL
-      || $file->isTemporary() === FALSE
-      || $file->getSize() > 2 * 1024 * 1024
-      || !in_array($file->getMimeType(), $allowedMimeTypes, TRUE)) {
-      throw new InvalidOptionException();
-    }
+    $file = $this->loadValidatedUploadFile($fid);
     $file->setPermanent();
     $file->save();
-    $this->fileUsage->add($file, 'simple_voting', 'voting_option', (string) $optionId);
+    try {
+      $this->fileUsage->add($file, 'simple_voting', 'voting_option', (string) $optionId);
+    }
+    catch (\Throwable $exception) {
+      $file->setTemporary();
+      $file->save();
+      throw $exception;
+    }
   }
 
   /**
@@ -260,8 +357,15 @@ class OptionStorage {
       return;
     }
     $file = $this->entityTypeManager->getStorage('file')->load((int) $fid);
-    if ($file !== NULL) {
-      $this->fileUsage->delete($file, 'simple_voting', 'voting_option', (string) $optionId);
+    if ($file === NULL) {
+      return;
+    }
+
+    $this->fileUsage->delete($file, 'simple_voting', 'voting_option', (string) $optionId);
+    if (str_starts_with($file->getFileUri(), self::IMAGE_DIRECTORY)
+      && !$this->fileUsage->listUsage($file)) {
+      $file->setTemporary();
+      $file->save();
     }
   }
 

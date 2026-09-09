@@ -145,6 +145,9 @@ class VotingQuestion extends ConfigEntityBase implements VotingQuestionInterface
    */
   public function preSave(EntityStorageInterface $storage): void {
     parent::preSave($storage);
+    if (!$this->isNew() && $this->getOriginalId() !== $this->id()) {
+      throw new \InvalidArgumentException('A voting question identifier cannot be changed after creation.');
+    }
     $now = \Drupal::time()->getRequestTime();
     if ($this->isNew()) {
       $this->created = $now;

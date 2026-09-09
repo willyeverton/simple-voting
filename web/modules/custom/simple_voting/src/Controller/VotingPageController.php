@@ -46,7 +46,7 @@ final class VotingPageController extends ControllerBase {
   public function listQuestions(): array {
     $build = [
       '#cache' => [
-        'tags' => ['simple_voting:question-list', 'config:simple_voting.settings'],
+        'tags' => ['simple_voting:question-list', 'config:voting_question_list', 'config:simple_voting.settings'],
         'contexts' => ['user', 'user.permissions'],
       ],
     ];

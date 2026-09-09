@@ -9,6 +9,8 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\Core\Url;
 use Drupal\simple_voting\Exception\DuplicateVoteException;
+use Drupal\simple_voting\Exception\InvalidOptionException;
+use Drupal\simple_voting\Exception\PersistenceFailureException;
 use Drupal\simple_voting\Exception\QuestionClosedException;
 use Drupal\simple_voting\Exception\VoteLockUnavailableException;
 use Drupal\simple_voting\Exception\VotingDisabledException;
@@ -100,18 +102,24 @@ final class VoteForm extends FormBase {
       '#default_value' => $voted_option_id,
     ];
 
+    $fileIds = array_values(array_filter(array_map(
+      static fn (array $option): ?int => !empty($option['image_fid']) ? (int) $option['image_fid'] : NULL,
+      $options,
+    )));
+    $files = $fileIds
+      ? $this->entityTypeManager->getStorage('file')->loadMultiple($fileIds)
+      : [];
+
     foreach ($options as $option) {
       $description = [];
-      if (!empty($option['image_fid'])) {
-        $file = $this->entityTypeManager->getStorage('file')->load((int) $option['image_fid']);
-        if ($file !== NULL) {
-          $description['image'] = [
-            '#theme' => 'image',
-            '#uri' => $file->getFileUri(),
-            '#alt' => (string) $option['title'],
-            '#attributes' => ['loading' => 'lazy'],
-          ];
-        }
+      if (!empty($option['image_fid']) && isset($files[(int) $option['image_fid']])) {
+        $file = $files[(int) $option['image_fid']];
+        $description['image'] = [
+          '#theme' => 'image',
+          '#uri' => $file->getFileUri(),
+          '#alt' => (string) $option['title'],
+          '#attributes' => ['loading' => 'lazy'],
+        ];
       }
       if ((string) ($option['description'] ?? '') !== '') {
         $description['text'] = [
@@ -194,6 +202,14 @@ final class VoteForm extends FormBase {
     }
     catch (QuestionClosedException | VotingDisabledException) {
       $this->messenger()->addWarning($this->t('This question is not accepting votes.'));
+      return;
+    }
+    catch (InvalidOptionException) {
+      $this->messenger()->addError($this->t('The selected option is no longer available. Please reload the question.'));
+      return;
+    }
+    catch (PersistenceFailureException) {
+      $this->messenger()->addError($this->t('The vote could not be registered. Please try again.'));
       return;
     }
 

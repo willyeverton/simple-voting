@@ -4,6 +4,7 @@ namespace Drupal\simple_voting\Controller;
 
 use Drupal\Core\Cache\CacheableJsonResponse;
 use Drupal\Core\Cache\CacheableMetadata;
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\simple_voting\Service\QuestionReadService;
@@ -27,6 +28,7 @@ final class VotingApiController extends ControllerBase {
 
   public function __construct(
     private readonly AccountProxyInterface $votingAccount,
+    private readonly ConfigFactoryInterface $votingConfigFactory,
     private readonly QuestionReadService $questionRead,
     private readonly VotingApiSerializer $serializer,
     private readonly VotingResultsService $results,
@@ -40,6 +42,7 @@ final class VotingApiController extends ControllerBase {
   public static function create(ContainerInterface $container): static {
     return new static(
       $container->get('current_user'),
+      $container->get('config.factory'),
       $container->get('simple_voting.question_read'),
       $container->get('simple_voting.api_serializer'),
       $container->get('simple_voting.results'),
@@ -53,13 +56,23 @@ final class VotingApiController extends ControllerBase {
    */
   public function listQuestions(): CacheableJsonResponse {
     $this->requireAuthenticated();
-    $questions = $this->questionRead->getQuestions(TRUE);
+    $votingEnabled = (bool) $this->votingConfigFactory
+      ->get('simple_voting.settings')
+      ->get('voting_enabled');
+    $questions = $votingEnabled ? $this->questionRead->getQuestions(TRUE) : [];
     $data = array_map(fn ($question): array => $this->serializer->questionSummary($question), $questions);
     $cache = (new CacheableMetadata())
-      ->addCacheTags(['simple_voting:question-list'])
-      ->addCacheContexts(['user.permissions']);
-    return (new CacheableJsonResponse(['data' => array_values($data)]))
+      ->addCacheTags([
+        'config:simple_voting.settings',
+        'simple_voting:question-list',
+        'config:voting_question_list',
+      ])
+      ->addCacheContexts(['user.permissions'])
+      ->setCacheMaxAge(0);
+    $response = (new CacheableJsonResponse(['data' => array_values($data)]))
       ->addCacheableDependency($cache);
+    $response->headers->set('Cache-Control', 'private, no-store');
+    return $response;
   }
 
   /**
@@ -76,10 +89,13 @@ final class VotingApiController extends ControllerBase {
         'config:simple_voting.question.' . $question_id,
         'simple_voting:question:' . $question_id,
       ])
-      ->addCacheContexts(['user.permissions']);
-    return (new CacheableJsonResponse([
+      ->addCacheContexts(['user.permissions'])
+      ->setCacheMaxAge(0);
+    $response = (new CacheableJsonResponse([
       'data' => $this->serializer->question($question, $this->questionRead->options($question_id)),
     ]))->addCacheableDependency($cache);
+    $response->headers->set('Cache-Control', 'private, no-store');
+    return $response;
   }
 
   /**
@@ -121,8 +137,11 @@ final class VotingApiController extends ControllerBase {
     }
 
     $result = $this->results->getResults($question_id);
-    return (new CacheableJsonResponse(['data' => $result['data']]))
-      ->addCacheableDependency($result['cache']);
+    $response = (new CacheableJsonResponse(['data' => $result['data']]))
+      ->addCacheableDependency($result['cache'])
+      ->addCacheableDependency((new CacheableMetadata())->setCacheMaxAge(0));
+    $response->headers->set('Cache-Control', 'private, no-store');
+    return $response;
   }
 
   /**
@@ -144,6 +163,11 @@ final class VotingApiController extends ControllerBase {
    *   The decoded associative JSON payload.
    */
   private function decodePayload(Request $request): array {
+    $contentType = strtolower(trim(explode(';', $request->headers->get('Content-Type', ''), 2)[0]));
+    if ($contentType !== 'application/json') {
+      throw new BadRequestHttpException();
+    }
+
     $content = trim($request->getContent());
     if ($content === '') {
       throw new BadRequestHttpException();

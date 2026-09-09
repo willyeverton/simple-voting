@@ -5,29 +5,41 @@ namespace Drupal\simple_voting\Service;
 use Drupal\Core\Cache\CacheTagsInvalidatorInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\simple_voting\Entity\VotingQuestionInterface;
+use Drupal\simple_voting\Exception\InvalidOptionException;
+use Drupal\simple_voting\Exception\OptionInUseException;
 use Drupal\simple_voting\Exception\PersistenceFailureException;
-use Drupal\simple_voting\Exception\QuestionHasVotesException;
 use Drupal\simple_voting\Exception\VoteLockUnavailableException;
 use Psr\Log\LoggerInterface;
 
 /**
- * Applies the safe deletion policy for questions.
+ * Persists a question and its owned options as one database operation.
  */
-final class QuestionDeletionService {
+final class QuestionPersistenceService {
 
   public function __construct(
     private readonly Connection $database,
     private readonly OptionStorage $optionStorage,
-    private readonly VoteStorage $voteStorage,
     private readonly VotingMutationLock $mutationLock,
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
     private readonly LoggerInterface $logger,
   ) {}
 
   /**
-   * Deletes a question only when it has no transactional votes.
+   * Saves the question and synchronizes its options.
+   *
+   * @param \Drupal\simple_voting\Entity\VotingQuestionInterface $question
+   *   The question entity to save.
+   * @param array<int, array<string, mixed>> $submittedOptions
+   *   The normalized form values for the question's options.
+   *
+   * @return int
+   *   The entity save status.
+   *
+   * @throws \Drupal\simple_voting\Exception\InvalidOptionException
+   * @throws \Drupal\simple_voting\Exception\OptionInUseException
+   * @throws \Drupal\simple_voting\Exception\PersistenceFailureException
    */
-  public function delete(VotingQuestionInterface $question): void {
+  public function save(VotingQuestionInterface $question, array $submittedOptions): int {
     $questionId = (string) $question->id();
     try {
       $this->mutationLock->acquire($questionId);
@@ -35,7 +47,7 @@ final class QuestionDeletionService {
     catch (VoteLockUnavailableException $exception) {
       $this->logger->warning('Question mutation lock unavailable.', [
         'question_id' => $questionId,
-        'operation' => 'delete_question',
+        'operation' => 'save_question',
         'exception_class' => $exception::class,
       ]);
       throw $exception;
@@ -43,23 +55,19 @@ final class QuestionDeletionService {
 
     $transaction = $this->database->startTransaction();
     try {
-      if ($this->voteStorage->hasVotesForQuestion($questionId)) {
-        throw new QuestionHasVotesException();
-      }
-
-      $this->optionStorage->deleteForQuestion($questionId, TRUE);
-      $question->delete();
+      $status = $question->save();
+      $this->optionStorage->sync($questionId, $submittedOptions, TRUE, FALSE);
       unset($transaction);
     }
-    catch (QuestionHasVotesException $exception) {
+    catch (InvalidOptionException | OptionInUseException $exception) {
       $transaction->rollBack();
       throw $exception;
     }
     catch (\Throwable $exception) {
       $transaction->rollBack();
-      $this->logger->error('Question deletion failed.', [
+      $this->logger->error('Question persistence failed.', [
         'question_id' => $questionId,
-        'operation' => 'delete_question',
+        'operation' => 'save_question',
         'exception_class' => $exception::class,
       ]);
       throw new PersistenceFailureException(previous: $exception);
@@ -74,6 +82,8 @@ final class QuestionDeletionService {
       'simple_voting:question-list',
       'config:voting_question_list',
     ]);
+
+    return $status;
   }
 
 }
