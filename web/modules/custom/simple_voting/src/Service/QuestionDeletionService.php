@@ -29,7 +29,10 @@ final class QuestionDeletionService {
    */
   public function delete(VotingQuestionInterface $question): void {
     $questionId = (string) $question->id();
+    $globalLockAcquired = FALSE;
     try {
+      $this->mutationLock->acquireGlobal();
+      $globalLockAcquired = TRUE;
       $this->mutationLock->acquire($questionId);
     }
     catch (VoteLockUnavailableException $exception) {
@@ -38,25 +41,33 @@ final class QuestionDeletionService {
         'operation' => 'delete_question',
         'exception_class' => $exception::class,
       ]);
+      if ($globalLockAcquired) {
+        $this->mutationLock->releaseGlobal();
+      }
       throw $exception;
     }
 
-    $transaction = $this->database->startTransaction();
+    $transaction = NULL;
     try {
+      $transaction = $this->database->startTransaction();
       if ($this->voteStorage->hasVotesForQuestion($questionId)) {
         throw new QuestionHasVotesException();
       }
 
-      $this->optionStorage->deleteForQuestion($questionId, TRUE);
+      $this->optionStorage->deleteForQuestion($questionId, TRUE, TRUE);
       $question->delete();
       unset($transaction);
     }
     catch (QuestionHasVotesException $exception) {
-      $transaction->rollBack();
+      if ($transaction !== NULL) {
+        $transaction->rollBack();
+      }
       throw $exception;
     }
     catch (\Throwable $exception) {
-      $transaction->rollBack();
+      if ($transaction !== NULL) {
+        $transaction->rollBack();
+      }
       $this->logger->error('Question deletion failed.', [
         'question_id' => $questionId,
         'operation' => 'delete_question',
@@ -65,7 +76,12 @@ final class QuestionDeletionService {
       throw new PersistenceFailureException(previous: $exception);
     }
     finally {
-      $this->mutationLock->release($questionId);
+      try {
+        $this->mutationLock->release($questionId);
+      }
+      finally {
+        $this->mutationLock->releaseGlobal();
+      }
     }
 
     $this->cacheTagsInvalidator->invalidateTags([

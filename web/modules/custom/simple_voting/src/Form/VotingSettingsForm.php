@@ -4,11 +4,23 @@ namespace Drupal\simple_voting\Form;
 
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\simple_voting\Exception\VoteLockUnavailableException;
+use Drupal\simple_voting\Service\VotingMutationLock;
+use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Global Simple Voting settings form.
  */
 final class VotingSettingsForm extends ConfigFormBase {
+
+  public function __construct(protected readonly VotingMutationLock $mutationLock) {}
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container): static {
+    return new static($container->get('simple_voting.mutation_lock'));
+  }
 
   /**
    * {@inheritdoc}
@@ -42,9 +54,22 @@ final class VotingSettingsForm extends ConfigFormBase {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state): void {
-    $this->configFactory->getEditable('simple_voting.settings')
-      ->set('voting_enabled', (bool) $form_state->getValue('voting_enabled'))
-      ->save();
+    try {
+      $this->mutationLock->acquireGlobal();
+      try {
+        $this->configFactory->getEditable('simple_voting.settings')
+          ->set('voting_enabled', (bool) $form_state->getValue('voting_enabled'))
+          ->save();
+      }
+      finally {
+        $this->mutationLock->releaseGlobal();
+      }
+    }
+    catch (VoteLockUnavailableException) {
+      $this->messenger()->addError($this->t('Voting settings could not be saved now. Please try again shortly.'));
+      return;
+    }
+
     $this->messenger()->addStatus($this->t('Voting settings saved.'));
     parent::submitForm($form, $form_state);
   }

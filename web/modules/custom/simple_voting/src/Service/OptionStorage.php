@@ -10,6 +10,7 @@ use Drupal\file\FileInterface;
 use Drupal\file\FileUsage\FileUsageInterface;
 use Drupal\simple_voting\Exception\InvalidOptionException;
 use Drupal\simple_voting\Exception\OptionInUseException;
+use Psr\Log\LoggerInterface;
 
 /**
  * Persistence and file usage boundary for question options.
@@ -39,6 +40,7 @@ class OptionStorage {
     private readonly FileUsageInterface $fileUsage,
     private readonly CacheTagsInvalidatorInterface $cacheTagsInvalidator,
     private readonly VotingMutationLock $mutationLock,
+    private readonly LoggerInterface $logger,
   ) {}
 
   /**
@@ -113,14 +115,22 @@ class OptionStorage {
    *   Whether the caller already owns the question mutation lock.
    * @param bool $invalidate
    *   Whether to invalidate question cache tags after synchronization.
+   * @param bool $globalLockHeld
+   *   Whether the caller already owns the global mutation gate.
    */
-  public function sync(string $questionId, array $submitted, bool $lockHeld = FALSE, bool $invalidate = TRUE): void {
-    $acquired = !$lockHeld;
-    if ($acquired) {
-      $this->mutationLock->acquire($questionId);
-    }
+  public function sync(string $questionId, array $submitted, bool $lockHeld = FALSE, bool $invalidate = TRUE, bool $globalLockHeld = FALSE): void {
+    $globalLockAcquired = FALSE;
+    $questionLockAcquired = FALSE;
 
     try {
+      if (!$globalLockHeld) {
+        $this->mutationLock->acquireGlobal();
+        $globalLockAcquired = TRUE;
+      }
+      if (!$lockHeld) {
+        $this->mutationLock->acquire($questionId);
+        $questionLockAcquired = TRUE;
+      }
       $normalized = [];
       foreach (array_values($submitted) as $weight => $option) {
         $title = trim((string) ($option['title'] ?? ''));
@@ -176,13 +186,17 @@ class OptionStorage {
         }
       }
 
+      $fileJournal = [
+        'attached' => [],
+        'released' => [],
+      ];
       $transaction = $this->database->startTransaction();
       try {
         foreach ($existingById as $id => $oldOption) {
           if (in_array($id, $submittedIds, TRUE)) {
             continue;
           }
-          $this->releaseFile($oldOption['image_fid'], $id);
+          $this->releaseFile($oldOption['image_fid'], $id, $fileJournal);
           $this->database->delete('simple_voting_option')
             ->condition('id', $id)
             ->execute();
@@ -205,6 +219,7 @@ class OptionStorage {
               $oldOption['image_fid'],
               $option['image_fid'],
               $option['id'],
+              $fileJournal,
             );
           }
           else {
@@ -217,12 +232,23 @@ class OptionStorage {
                 'weight' => $option['weight'],
               ])
               ->execute();
-            $this->attachFile($option['image_fid'], $optionId);
+            $this->attachFile($option['image_fid'], $optionId, $fileJournal);
           }
         }
       }
       catch (\Throwable $exception) {
         $transaction->rollBack();
+        try {
+          $this->compensateFileOperations($questionId, $fileJournal);
+        }
+        catch (\Throwable $compensationException) {
+          $this->logger->critical('Option file compensation failed.', [
+            'question_id' => $questionId,
+            'operation' => 'sync_options',
+            'exception_class' => $compensationException::class,
+          ]);
+          throw $compensationException;
+        }
         throw $exception;
       }
 
@@ -232,8 +258,11 @@ class OptionStorage {
       }
     }
     finally {
-      if ($acquired) {
+      if ($questionLockAcquired) {
         $this->mutationLock->release($questionId);
+      }
+      if ($globalLockAcquired) {
+        $this->mutationLock->releaseGlobal();
       }
     }
   }
@@ -245,28 +274,51 @@ class OptionStorage {
    *   The question machine name.
    * @param bool $lockHeld
    *   Whether the caller already owns the question mutation lock.
+   * @param bool $globalLockHeld
+   *   Whether the caller already owns the global mutation gate.
    */
-  public function deleteForQuestion(string $questionId, bool $lockHeld = FALSE): void {
-    $acquired = !$lockHeld;
-    if ($acquired) {
-      $this->mutationLock->acquire($questionId);
-    }
+  public function deleteForQuestion(string $questionId, bool $lockHeld = FALSE, bool $globalLockHeld = FALSE): void {
+    $globalLockAcquired = FALSE;
+    $questionLockAcquired = FALSE;
+    $fileJournal = [
+      'attached' => [],
+      'released' => [],
+    ];
 
     try {
-      $options = $this->getOptions($questionId);
-      foreach ($options as $option) {
-        $this->releaseFile($option['image_fid'], (int) $option['id']);
+      if (!$globalLockHeld) {
+        $this->mutationLock->acquireGlobal();
+        $globalLockAcquired = TRUE;
       }
-      $this->database->delete('simple_voting_option')
-        ->condition('question_id', $questionId)
-        ->execute();
+      if (!$lockHeld) {
+        $this->mutationLock->acquire($questionId);
+        $questionLockAcquired = TRUE;
+      }
+
+      try {
+        $options = $this->getOptions($questionId);
+        foreach ($options as $option) {
+          $this->releaseFile($option['image_fid'], (int) $option['id'], $fileJournal);
+        }
+        $this->database->delete('simple_voting_option')
+          ->condition('question_id', $questionId)
+          ->execute();
+      }
+      catch (\Throwable $exception) {
+        $this->compensateFileOperations($questionId, $fileJournal);
+        throw $exception;
+      }
+
       if (!$lockHeld) {
         $this->invalidateQuestion($questionId);
       }
     }
     finally {
-      if ($acquired) {
+      if ($questionLockAcquired) {
         $this->mutationLock->release($questionId);
+      }
+      if ($globalLockAcquired) {
+        $this->mutationLock->releaseGlobal();
       }
     }
   }
@@ -297,19 +349,22 @@ class OptionStorage {
 
   /**
    * Synchronizes File API usage for an existing option.
+   *
+   * @param int|null $oldFid
+   *   The previous file ID.
+   * @param int|null $newFid
+   *   The replacement file ID.
+   * @param int $optionId
+   *   The option ID owning the usage.
+   * @param array<string, mixed> $fileJournal
+   *   File operations to compensate if the transaction fails.
    */
-  private function syncFileUsage(?int $oldFid, ?int $newFid, int $optionId): void {
+  private function syncFileUsage(?int $oldFid, ?int $newFid, int $optionId, array &$fileJournal): void {
     if ((int) $oldFid === (int) $newFid) {
       return;
     }
-    $this->attachFile($newFid, $optionId);
-    try {
-      $this->releaseFile($oldFid, $optionId);
-    }
-    catch (\Throwable $exception) {
-      $this->releaseFile($newFid, $optionId);
-      throw $exception;
-    }
+    $this->attachFile($newFid, $optionId, $fileJournal);
+    $this->releaseFile($oldFid, $optionId, $fileJournal);
   }
 
   /**
@@ -330,19 +385,33 @@ class OptionStorage {
   }
 
   /**
-   * Registers a permanent file usage.
+   * Registers a permanent file usage and records the side effect.
+   *
+   * @param int|null $fid
+   *   The file ID to attach.
+   * @param int $optionId
+   *   The option ID owning the usage.
+   * @param array<string, mixed> $fileJournal
+   *   File operations to compensate if the transaction fails.
    */
-  private function attachFile(?int $fid, int $optionId): void {
+  private function attachFile(?int $fid, int $optionId, array &$fileJournal): void {
     if (!$fid) {
       return;
     }
     $file = $this->loadValidatedUploadFile($fid);
-    $file->setPermanent();
-    $file->save();
+    $fileJournal['attached'][] = [
+      'fid' => $fid,
+      'option_id' => $optionId,
+    ];
     try {
+      $file->setPermanent();
+      $file->save();
       $this->fileUsage->add($file, 'simple_voting', 'voting_option', (string) $optionId);
     }
     catch (\Throwable $exception) {
+      if ($this->hasFileUsage($file, $optionId)) {
+        $this->fileUsage->delete($file, 'simple_voting', 'voting_option', (string) $optionId);
+      }
       $file->setTemporary();
       $file->save();
       throw $exception;
@@ -350,23 +419,97 @@ class OptionStorage {
   }
 
   /**
-   * Releases one File API usage record.
+   * Releases one File API usage record and records the side effect.
+   *
+   * @param int|null $fid
+   *   The file ID to release.
+   * @param int $optionId
+   *   The option ID owning the usage.
+   * @param array<string, mixed> $fileJournal
+   *   File operations to compensate if the transaction fails.
    */
-  private function releaseFile(?int $fid, int $optionId): void {
+  private function releaseFile(?int $fid, int $optionId, array &$fileJournal): void {
     if (!$fid) {
       return;
     }
     $file = $this->entityTypeManager->getStorage('file')->load((int) $fid);
-    if ($file === NULL) {
+    if (!$file instanceof FileInterface) {
       return;
     }
 
-    $this->fileUsage->delete($file, 'simple_voting', 'voting_option', (string) $optionId);
+    if ($this->hasFileUsage($file, $optionId)) {
+      $fileJournal['released'][] = [
+        'fid' => (int) $fid,
+        'option_id' => $optionId,
+      ];
+      $this->fileUsage->delete($file, 'simple_voting', 'voting_option', (string) $optionId);
+    }
     if (str_starts_with($file->getFileUri(), self::IMAGE_DIRECTORY)
       && !$this->fileUsage->listUsage($file)) {
       $file->setTemporary();
       $file->save();
     }
+  }
+
+  /**
+   * Compensates File API side effects after a database rollback.
+   *
+   * @param string $questionId
+   *   The question machine name used for operational logging.
+   * @param array<string, mixed> $fileJournal
+   *   File operations recorded during the failed mutation.
+   */
+  private function compensateFileOperations(string $questionId, array $fileJournal): void {
+    foreach (array_reverse($fileJournal['attached']) as $operation) {
+      $file = $this->entityTypeManager->getStorage('file')->load($operation['fid']);
+      if (!$file instanceof FileInterface) {
+        continue;
+      }
+      if ($this->hasFileUsage($file, $operation['option_id'])) {
+        $this->fileUsage->delete(
+          $file,
+          'simple_voting',
+          'voting_option',
+          (string) $operation['option_id'],
+        );
+      }
+      if (str_starts_with($file->getFileUri(), self::IMAGE_DIRECTORY)
+        && !$this->fileUsage->listUsage($file)) {
+        $file->setTemporary();
+        $file->save();
+      }
+    }
+
+    foreach (array_reverse($fileJournal['released']) as $operation) {
+      $file = $this->entityTypeManager->getStorage('file')->load($operation['fid']);
+      if (!$file instanceof FileInterface) {
+        continue;
+      }
+      $file->setPermanent();
+      $file->save();
+      if (!$this->hasFileUsage($file, $operation['option_id'])) {
+        $this->fileUsage->add(
+          $file,
+          'simple_voting',
+          'voting_option',
+          (string) $operation['option_id'],
+        );
+      }
+    }
+
+    $this->logger->notice('Option file operations compensated after rollback.', [
+      'question_id' => $questionId,
+      'attached_count' => count($fileJournal['attached']),
+      'released_count' => count($fileJournal['released']),
+    ]);
+  }
+
+  /**
+   * Determines whether this module owns a usage record for an option.
+   */
+  private function hasFileUsage(FileInterface $file, int $optionId): bool {
+    $usage = $this->fileUsage->listUsage($file);
+    return isset($usage['simple_voting']['voting_option'][(string) $optionId]);
   }
 
 }

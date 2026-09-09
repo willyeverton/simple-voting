@@ -222,22 +222,22 @@ final class VotingQuestionForm extends EntityForm {
     catch (OptionInUseException) {
       $this->messenger()->addError($this->t('An option with votes cannot be removed. Close the question instead.'));
       $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
-      return SAVED_UPDATED;
+      return 0;
     }
     catch (InvalidOptionException) {
       $this->messenger()->addError($this->t('One of the submitted options is invalid.'));
       $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
-      return SAVED_UPDATED;
+      return 0;
     }
     catch (VoteLockUnavailableException) {
       $this->messenger()->addError($this->t('The question could not be saved now. Please try again shortly.'));
       $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
-      return SAVED_UPDATED;
+      return 0;
     }
     catch (PersistenceFailureException) {
       $this->messenger()->addError($this->t('The question could not be saved. Please try again.'));
       $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
-      return SAVED_UPDATED;
+      return 0;
     }
 
     $this->messenger()->addStatus($status === SAVED_NEW

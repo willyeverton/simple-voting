@@ -43,7 +43,10 @@ class VotingService {
       throw new \InvalidArgumentException('A vote requires an authenticated user.');
     }
 
+    $globalLockAcquired = FALSE;
     try {
+      $this->mutationLock->acquireGlobal();
+      $globalLockAcquired = TRUE;
       $this->mutationLock->acquire($questionId);
     }
     catch (VoteLockUnavailableException $exception) {
@@ -51,6 +54,9 @@ class VotingService {
         'uid' => $uid,
         'question_id' => $questionId,
       ]);
+      if ($globalLockAcquired) {
+        $this->mutationLock->releaseGlobal();
+      }
       throw $exception;
     }
 
@@ -144,7 +150,12 @@ class VotingService {
       ];
     }
     finally {
-      $this->mutationLock->release($questionId);
+      try {
+        $this->mutationLock->release($questionId);
+      }
+      finally {
+        $this->mutationLock->releaseGlobal();
+      }
     }
   }
 

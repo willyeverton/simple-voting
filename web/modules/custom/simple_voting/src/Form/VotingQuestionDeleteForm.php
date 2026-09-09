@@ -10,7 +10,6 @@ use Drupal\simple_voting\Exception\PersistenceFailureException;
 use Drupal\simple_voting\Exception\VoteLockUnavailableException;
 use Drupal\simple_voting\Service\QuestionDeletionService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 /**
  * Confirms safe deletion of a voting question.
@@ -51,11 +50,10 @@ final class VotingQuestionDeleteForm extends EntityConfirmFormBase {
     try {
       $this->deletionService->delete($question);
     }
-    catch (QuestionHasVotesException $exception) {
-      throw new UnprocessableEntityHttpException(
-        'Questions with votes must be closed or archived instead of deleted.',
-        $exception,
-      );
+    catch (QuestionHasVotesException) {
+      $this->messenger()->addError($this->t('Questions with votes must be closed or archived instead of deleted.'));
+      $form_state->setRedirectUrl($this->getCancelUrl());
+      return;
     }
     catch (VoteLockUnavailableException) {
       $this->messenger()->addError($this->t('The question could not be deleted now. Please try again shortly.'));

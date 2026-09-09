@@ -41,7 +41,10 @@ final class QuestionPersistenceService {
    */
   public function save(VotingQuestionInterface $question, array $submittedOptions): int {
     $questionId = (string) $question->id();
+    $globalLockAcquired = FALSE;
     try {
+      $this->mutationLock->acquireGlobal();
+      $globalLockAcquired = TRUE;
       $this->mutationLock->acquire($questionId);
     }
     catch (VoteLockUnavailableException $exception) {
@@ -50,21 +53,29 @@ final class QuestionPersistenceService {
         'operation' => 'save_question',
         'exception_class' => $exception::class,
       ]);
+      if ($globalLockAcquired) {
+        $this->mutationLock->releaseGlobal();
+      }
       throw $exception;
     }
 
-    $transaction = $this->database->startTransaction();
+    $transaction = NULL;
     try {
+      $transaction = $this->database->startTransaction();
       $status = $question->save();
-      $this->optionStorage->sync($questionId, $submittedOptions, TRUE, FALSE);
+      $this->optionStorage->sync($questionId, $submittedOptions, TRUE, FALSE, TRUE);
       unset($transaction);
     }
     catch (InvalidOptionException | OptionInUseException $exception) {
-      $transaction->rollBack();
+      if ($transaction !== NULL) {
+        $transaction->rollBack();
+      }
       throw $exception;
     }
     catch (\Throwable $exception) {
-      $transaction->rollBack();
+      if ($transaction !== NULL) {
+        $transaction->rollBack();
+      }
       $this->logger->error('Question persistence failed.', [
         'question_id' => $questionId,
         'operation' => 'save_question',
@@ -73,7 +84,12 @@ final class QuestionPersistenceService {
       throw new PersistenceFailureException(previous: $exception);
     }
     finally {
-      $this->mutationLock->release($questionId);
+      try {
+        $this->mutationLock->release($questionId);
+      }
+      finally {
+        $this->mutationLock->releaseGlobal();
+      }
     }
 
     $this->cacheTagsInvalidator->invalidateTags([
