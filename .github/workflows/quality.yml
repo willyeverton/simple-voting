@@ -39,5 +39,56 @@ jobs:
       - name: Run PHPStan
         run: bash scripts/phpstan.sh
 
-      - name: Run PHPUnit
+      - name: Run unit tests
         run: bash scripts/phpunit.sh
+
+  drupal-tests:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: drupal
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: curl, dom, gd, intl, mbstring, mysqli, pdo_mysql, xml, zip
+          tools: composer:2.10
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Start Drupal test server
+        run: php -S 127.0.0.1:8080 -t web web/.ht.router.php > /tmp/simple-voting-php-server.log 2>&1 &
+
+      - name: Wait for Drupal test server
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:8080/; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/simple-voting-php-server.log
+          exit 1
+
+      - name: Run Kernel and Functional tests
+        env:
+          SIMPLETEST_DB: mysql://root:root@127.0.0.1:3306/drupal
+          SIMPLETEST_BASE_URL: http://127.0.0.1:8080
+        run: vendor/bin/phpunit --configuration=phpunit.drupal.xml.dist
