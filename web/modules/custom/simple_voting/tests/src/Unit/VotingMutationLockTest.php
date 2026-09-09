@@ -40,6 +40,25 @@ final class VotingMutationLockTest extends TestCase {
   }
 
   /**
+   * @covers ::acquireGlobal
+   * @covers ::releaseGlobal
+   */
+  public function testGlobalGateUsesDedicatedConfigurationImportKey(): void {
+    $lock = $this->createMock(LockBackendInterface::class);
+    $lock->expects(self::once())
+      ->method('acquire')
+      ->with('simple_voting.config_import', 30.0)
+      ->willReturn(TRUE);
+    $lock->expects(self::once())
+      ->method('release')
+      ->with('simple_voting.config_import');
+
+    $mutationLock = new VotingMutationLock($lock);
+    $mutationLock->acquireGlobal();
+    $mutationLock->releaseGlobal();
+  }
+
+  /**
    * @covers ::acquire
    */
   public function testUnavailableLockProducesDomainFailure(): void {

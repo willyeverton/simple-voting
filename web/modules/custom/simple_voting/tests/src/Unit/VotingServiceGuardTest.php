@@ -65,8 +65,8 @@ final class VotingServiceGuardTest extends TestCase {
    */
   public function testLockIsReleasedWhenVotingIsDisabled(): void {
     $lock = $this->createMock(LockBackendInterface::class);
-    $lock->expects(self::once())->method('acquire')->willReturn(TRUE);
-    $lock->expects(self::once())->method('release');
+    $lock->expects(self::exactly(2))->method('acquire')->willReturn(TRUE);
+    $lock->expects(self::exactly(2))->method('release');
 
     $service = $this->createService(FALSE, lock: $lock);
     $this->expectException(VotingDisabledException::class);
