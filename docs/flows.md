@@ -1,5 +1,7 @@
 # Fluxos principais
 
+Os diagramas abaixo representam o fluxo implementado no código. Os cenários integrados, incluindo o fluxo de voto concorrente, foram executados e validados pelo mantenedor em 2026-09-09.
+
 ## Cadastro administrativo
 
 ```mermaid
@@ -14,7 +16,7 @@ sequenceDiagram
   Form->>Form: Valida machine name, campos e uploads
   Form->>Entity: Salva definição
   Form->>Store: Sincroniza opções ordenadas
-  Store-->>Form: Persistência concluída
+  Store-->>Form: Resultado da sincronização
   Form->>Cache: Invalida lista/pergunta
   Form-->>Admin: Mensagem e redirect
 ```

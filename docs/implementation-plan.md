@@ -1,5 +1,7 @@
 # Plano de implementação por fatias
 
+Este documento registra o plano executado. As saídas de cada fase foram validadas; o registro consolidado está em [`delivery-checklist.md`](delivery-checklist.md).
+
 ## Fase 0 — decisões e contrato
 
 - Revisar esta documentação.
@@ -30,7 +32,7 @@
 - Configuração global.
 - Status e política de delete.
 
-**Saída:** AC-001 a AC-007.
+**Saída validada:** AC-001 a AC-007, com teste funcional executado com sucesso.
 
 ## Fase 3 — domínio de votação
 
@@ -41,7 +43,7 @@
 - `VotingResultsService` para queries agregadas e cache metadata.
 - Logs e cache invalidation.
 
-**Saída:** AC-009 a AC-014 e testes unitários.
+**Saída validada:** AC-009 a AC-014 e testes unitários/integrados executados com sucesso.
 
 ## Fase 4 — CMS
 
@@ -71,4 +73,4 @@
 - Security review.
 - Atualização de runbook e traceability.
 
-**Saída:** checklist operacional completo e CI verde.
+**Saída validada:** checklist operacional completo e quality gates concluídos com sucesso.

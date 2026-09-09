@@ -2,7 +2,7 @@
 
 **Status:** especificação vigente para a implementação e validação
 **Fonte:** desafio técnico de Sistema de Votação Simples
-**Escopo atual:** módulo customizado implementado; esta documentação, os testes e as verificações operacionais permanecem como fonte de aceitação.
+**Escopo atual:** módulo customizado implementado e validado pelo mantenedor em 2026-09-09; esta documentação descreve o comportamento entregue e os critérios que devem ser preservados em futuras alterações.
 
 ## 1. Objetivo
 

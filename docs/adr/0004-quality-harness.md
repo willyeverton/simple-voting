@@ -1,6 +1,6 @@
 # ADR 0004 — Harness de qualidade
 
-- **Status:** aceito
+- **Status:** aceito e validado
 - **Data:** 2026-09-06
 
 ## Contexto
@@ -18,7 +18,9 @@ Centralizar comandos no Lando e executar quality gates em cada alteração relev
 - PHPUnit.
 - Drush status para verificar runtime.
 
-O CI executará as mesmas categorias de validação em PHP 8.5. O harness deve falhar com diagnóstico acionável e não deve desabilitar auditorias ou ignorar requisitos de plataforma.
+A direção aprovada é manter as mesmas categorias de validação em PHP 8.5 no ambiente local e no CI. O harness deve falhar com diagnóstico acionável e não deve desabilitar auditorias ou ignorar requisitos de plataforma.
+
+O workflow do CI executa Composer validate, Composer audit, PHPCS, PHPStan e PHPUnit Unit. As suítes Kernel/Functional e as verificações de integração dependentes de banco foram executadas com sucesso no ambiente Lando pelo mantenedor em 2026-09-09.
 
 ## Consequências
 

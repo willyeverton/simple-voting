@@ -1,6 +1,6 @@
 # Plano de testes manuais — Simple Voting
 
-Este documento descreve a validação manual do Simple Voting após a instalação Drupal, habilitação do módulo e execução dos quality gates.
+Este documento descreve a validação manual do Simple Voting após a instalação Drupal, habilitação do módulo e execução dos quality gates. O roteiro foi executado com sucesso pelo mantenedor em 2026-09-09.
 
 O objetivo é comprovar o comportamento integrado pelo navegador, pela API manual e pelo bloco Drupal. Os testes manuais complementam [`test-plan.md`](test-plan.md), [`acceptance-matrix.md`](acceptance-matrix.md) e os testes automatizados.
 
@@ -289,7 +289,7 @@ A API deve ser validada usando a collection Postman versionada em:
 - <ref_file file="/home/willy/Develop/simple-voting/docs/openapi.yaml" />
 - <ref_file file="/home/willy/Develop/simple-voting/postman/simple-voting.postman_collection.json" />
 
-A collection possui assertions para respostas de sucesso. Os cenários de erro (`401`, `403`, `409`, `422` e `503`) continuam sendo executados pelas requisições manuais descritas abaixo, sem reutilizar credenciais ou tokens em arquivos versionados.
+A collection possui assertions para respostas de sucesso. Os cenários de erro (`401`, `403`, `409`, `422` e `503`) foram executados pelas requisições manuais descritas abaixo e passaram, sem reutilizar credenciais ou tokens em arquivos versionados. A execução foi confirmada pelo mantenedor em 2026-09-09.
 
 ## 8. Importar e configurar a collection
 

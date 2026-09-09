@@ -1,5 +1,7 @@
 # Threat model e controles de segurança
 
+A tabela abaixo registra as ameaças, controles e evidências validadas na entrega. Os resultados foram confirmados pelo mantenedor em 2026-09-09 e devem ser repetidos em alterações futuras.
+
 ## Ativos
 
 - Integridade da contagem de votos.

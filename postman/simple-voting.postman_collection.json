@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Simple Voting API",
-    "description": "Collection inicial alinhada a docs/openapi.yaml. Requer uma instalação Drupal e autenticação em todos os endpoints; o usuário precisa das permissões específicas para votar e consultar resultados ocultos.",
+    "description": "Collection alinhada a docs/openapi.yaml e executada com sucesso em 2026-09-09. Requer uma instalação Drupal, autenticação em todos os endpoints e permissões específicas para votar e consultar resultados ocultos.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

@@ -1,8 +1,8 @@
 # Simple Voting — Matriz de aceitação
 
-Cada requisito deve possuir evidência em teste automatizado, teste manual documentado ou ambos.
+Cada requisito possui evidência em teste automatizado, teste manual documentado ou ambos. Os cenários desta matriz foram executados e passaram conforme confirmação do mantenedor em 2026-09-09. O estado consolidado está em [`delivery-checklist.md`](delivery-checklist.md).
 
-| ID | Cenário | Resultado esperado | Evidência planejada |
+| ID | Cenário | Resultado esperado | Evidência validada |
 |---|---|---|---|
 | AC-001 | Administrador cria pergunta com identificador único | Pergunta é persistida e aparece na listagem administrativa | Functional test |
 | AC-002 | Identificador já existente | Formulário rejeita a duplicidade sem alterar dados | Functional test |

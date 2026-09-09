@@ -11,7 +11,9 @@ As opções possuem título, descrição, imagem e ordem. Elas são editadas jun
 
 Persistir opções em tabela customizada vinculada à pergunta, com schema explícito, índice de ordenação e referência opcional para arquivo Drupal. Não serializar as opções em um campo arbitrário e não criar uma entidade independente sem necessidade de negócio.
 
-A camada de formulário sincronizará as opções submetidas dentro de uma operação controlada. A camada de serviço e as queries sempre validarão `question_id` junto do `option_id`.
+A camada de formulário sincroniza as opções submetidas dentro de uma operação controlada. A camada de serviço e as queries validam `question_id` junto do `option_id`.
+
+A operação de banco e os efeitos da File API não formam uma transação única: alterações em `file_usage` e no estado do arquivo podem exigir compensação quando ocorre falha após o início da sincronização. Essa limitação deve ser considerada antes de uso produtivo.
 
 ## Consequências
 

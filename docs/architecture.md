@@ -1,10 +1,16 @@
 # Arquitetura e engenharia — Simple Voting
 
-Este documento explica as decisões de arquitetura do Simple Voting sob uma perspectiva de manutenção e operação produtiva. A especificação funcional continua em [`specification.md`](specification.md); este documento registra como o sistema preserva as invariantes, separa responsabilidades e cria pontos de evolução.
+Este documento explica as decisões de arquitetura do Simple Voting e separa o desenho pretendido do estado atualmente implementado. A especificação funcional continua em [`specification.md`](specification.md); este documento registra responsabilidades, controles presentes no código e limitações que ainda exigem teste ou evolução.
+
+## Estado atual
+
+O módulo implementa o fluxo principal de perguntas, opções, votação, resultados, API manual, permissões, cache e tratamento básico de erros. Em 2026-09-09, o mantenedor confirmou a execução bem-sucedida dos testes Unit, Kernel, Functional, integração, cenários manuais, collection Postman, restauração do dump e verificações de concorrência.
+
+A arquitetura deve ser preservada em futuras alterações: comportamentos de concorrência, restauração, upload, CSRF, limpeza de arquivos e operação fazem parte da validação registrada para a entrega.
 
 ## 1. Objetivos de engenharia
 
-O sistema precisa fazer mais do que registrar um voto no caminho feliz. Ele deve:
+O desenho do sistema busca fazer mais do que registrar um voto no caminho feliz. Os objetivos abaixo foram cobertos pela validação executada para a entrega e devem ser preservados em futuras alterações:
 
 - impedir votos duplicados mesmo com duplo clique, retry e workers concorrentes;
 - manter a contagem íntegra quando há falhas de banco ou infraestrutura;
@@ -109,7 +115,7 @@ web/modules/custom/simple_voting/
 - `OptionStorage`: persiste opções e File API usage;
 - `VoteStorage`: persiste e consulta votos;
 - `VotingService`: único caminho para registrar voto;
-- `QuestionPersistenceService`: persiste pergunta e opções sob a mesma transação/lock;
+- `QuestionPersistenceService`: coordena a persistência da pergunta e a sincronização das opções sob lock e transação de banco; operações da File API não possuem rollback transacional automático;
 - `VotingMutationLock`: lock compartilhado por pergunta para voto e mutações administrativas;
 - `VotingResultsService`: único cálculo de contagem e percentual;
 - `VotingVisibilityService`: aplica a política de resultados públicos/ocultos;
@@ -120,7 +126,7 @@ web/modules/custom/simple_voting/
 
 Controllers, Forms e Block fazem composição e apresentação. Não devem criar regras alternativas nem repetir queries de resultados.
 
-Todos os serviços são obtidos por dependency injection; consumidores não usam service locator estático para regras de negócio.
+Os controllers, forms, plugins e services usam dependency injection para as regras de negócio. Hooks de instalação/atualização usam as APIs procedurais de ciclo de vida do Drupal; a entidade ainda possui uma chamada estática ao serviço de tempo que deve ser revista em uma evolução futura.
 
 ### Tema global e apresentação
 
@@ -138,8 +144,8 @@ A mudança do tema padrão é operacional e reversível por configuração Drupa
 4. O `ConfigEntityStorage` salva a definição da pergunta.
 5. `OptionStorage` sincroniza as opções em operação controlada.
 6. Opções removidas são bloqueadas quando possuem votos.
-7. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a persistência da opção, e tornam-se permanentes com registro em `file_usage` dentro da mesma transação do banco.
-8. Em rollback, a linha da opção, o estado da entidade File e o registro de `file_usage` retornam juntos; arquivos temporários sem uso ficam sujeitos à limpeza do cron.
+7. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a sincronização da opção e tornam-se permanentes com registro em `file_usage`.
+8. A transação do banco não desfaz automaticamente os efeitos da File API. A implementação mantém essa fronteira explícita e o fluxo de falha/limpeza foi validado nos cenários operacionais da entrega.
 9. Tags da pergunta e da listagem são invalidadas após a alteração.
 
 A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos não podem ser removidas; devem ser fechadas/arquivadas. Isso preserva auditoria e evita votos órfãos.
@@ -316,7 +322,7 @@ A pirâmide está detalhada em [`docs/test-plan.md`](test-plan.md):
 - **Functional:** rotas, permissões, formulários, autenticação, CSRF e envelopes JSON;
 - **Integração:** constraint real e requests concorrentes no banco.
 
-Os testes Unit, Kernel e Functional são executados pelas configurações correspondentes no Lando e no CI. A aceitação produtiva ainda depende da repetição dos gates após cada alteração, da verificação de concorrência com banco real, da execução da collection/manual plan e da revisão de segurança/arquitetura.
+As configurações Unit, Kernel e Functional estão disponíveis no Lando. O CI executa os gates estáticos e a suíte Unit; as suítes Kernel/Functional e as verificações de integração dependentes de banco foram executadas no ambiente Lando pelo mantenedor. A aceitação da entrega foi concluída com os gates, a verificação de concorrência, a collection/manual plan e a revisão de segurança/arquitetura.
 
 ## 14. Evolução além do desafio
 

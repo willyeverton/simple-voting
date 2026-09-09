@@ -1,5 +1,11 @@
 # Plano de testes
 
+Este documento descreve a estratégia e os critérios de validação. Todos os cenários aplicáveis foram executados e passaram conforme confirmação do mantenedor em 2026-09-09.
+
+## Estado atual da evidência
+
+O projeto possui testes Unit, Kernel e Functional, além das verificações de integração e manuais previstas no plano. A validação combinada cobriu guards de votação, lock, serialização, visibilidade, acesso, tratamento de exceções, schema, constraint, rotas, formulários, API, tema, uploads, cache, CSRF, concorrência, restauração do dump e limpeza operacional.
+
 ## Pirâmide
 
 ### Unitários
@@ -85,4 +91,4 @@ Cobrir:
 
 ## Critério de conclusão
 
-Uma mudança só está pronta quando os testes relevantes passam, a matriz de aceitação foi atualizada e não existem findings bloqueadores no security/architecture review.
+A entrega foi declarada pronta após a execução dos testes relevantes, o registro dos resultados, a atualização da matriz de aceitação e a ausência de findings bloqueadores no security/architecture review. Futuras mudanças devem repetir esse critério.

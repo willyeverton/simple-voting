@@ -1,6 +1,6 @@
 # Matriz de rastreabilidade
 
-Cada requisito funcional e não funcional deve apontar para uma evidência verificável.
+Cada requisito funcional e não funcional aponta para uma evidência verificável. As referências abaixo foram validadas na entrega; consulte [`delivery-checklist.md`](delivery-checklist.md) para o registro consolidado.
 
 | Requisito | Especificação | Aceitação | API/ADR | Teste/evidência |
 |---|---|---|---|---|

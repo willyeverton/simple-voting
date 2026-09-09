@@ -6,7 +6,11 @@ Backend Drupal 11 para o desafio técnico de votação simples. Administradores 
 
 ## Estado do projeto
 
-A implementação customizada está em `web/modules/custom/simple_voting`. O projeto contém o módulo, contratos, ADRs, testes iniciais e harness de qualidade. A instalação local do site Drupal e a execução dos gates devem ser feitas pelo usuário em um ambiente Lando.
+A implementação customizada está em `web/modules/custom/simple_voting`. O repositório contém o módulo, contratos, ADRs, testes iniciais e harness de qualidade.
+
+O estado atual é uma implementação validada do fluxo de votação, com cobertura Unit, Kernel, Functional e integração executada pelo mantenedor. Em 2026-09-09, o mantenedor confirmou que os quality gates, testes Drupal, cenários manuais, collection Postman, restauração do dump e verificações de concorrência passaram com sucesso.
+
+O workflow do GitHub Actions mantém os gates estáticos e a suíte Unit; as validações que dependem de Drupal, banco e ambiente local foram executadas no ambiente Lando conforme documentado.
 
 Para entender as decisões de engenharia, consulte [`docs/architecture.md`](docs/architecture.md). Para comandos operacionais, consulte [`docs/runbook.md`](docs/runbook.md).
 
@@ -69,7 +73,7 @@ Se o site já estiver instalado, pule o instalador e execute apenas a habilitaç
 
 ### Restaurar o dump em ambiente limpo
 
-O dump de demonstração fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Ele preserva o estado estrutural e operacional necessário para o bootstrap, incluindo configuração, `core.extension`, `key_value`, blocos e schemas. Dados de usuários, sessões, votos, logs, caches e tabelas temporárias de teste não são transportados; tabelas voláteis permanecem apenas com sua estrutura. A restauração deve ser feita sobre uma instalação Drupal nova.
+O dump de demonstração fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Ele foi preparado para uma instalação Drupal nova e contém configuração, `core.extension`, `key_value`, blocos e schemas, sem usuários, sessões, votos, logs, caches ou dados temporários de teste. A restauração em ambiente limpo foi executada e validada pelo mantenedor em 2026-09-09.
 
 Use uma cópia separada do projeto e um nome Lando diferente do ambiente de desenvolvimento. Depois da instalação limpa do Drupal, execute **nesta ordem**:
 
@@ -97,7 +101,7 @@ lando drush sql:query "SELECT COUNT(*) AS options FROM simple_voting_option;"
 lando drush sql:query "SELECT COUNT(*) AS votes FROM simple_voting_vote;"
 ```
 
-O resultado esperado para o dump atual é `3` perguntas, `6` opções e `0` votos. Se `simple_voting_vote` não existir depois do import, interrompa o procedimento e não prossiga com um banco parcialmente restaurado.
+O conteúdo esperado do dump atual é `3` perguntas, `6` opções e `0` votos. Esses valores descrevem o artefato SQL; confirme-os somente após restaurar o dump em uma instalação nova. Se `simple_voting_vote` não existir depois do import, interrompa o procedimento e não prossiga com um banco parcialmente restaurado.
 
 O uninstall do módulo é bloqueado quando existem opções ou votos. Uma remoção destrutiva exige backup verificado e confirmação operacional explícita por meio do procedimento documentado em [`docs/runbook.md`](docs/runbook.md).
 
@@ -190,7 +194,7 @@ curl --fail-with-body \
   'https://simple-voting.lndo.site/api/v1/questions'
 ```
 
-A especificação completa está em [`docs/openapi.yaml`](docs/openapi.yaml), e os cenários reproduzíveis estão em [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json).
+A especificação está em [`docs/openapi.yaml`](docs/openapi.yaml), e a collection validada está em [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json). O mantenedor confirmou a execução da collection e dos cenários de erro em 2026-09-09.
 
 ## Executar testes e quality gates
 
@@ -275,10 +279,12 @@ lando drush updb -y
 lando drush cr
 ```
 
-### O que confirmar
+### Validações concluídas
+
+Os itens abaixo foram executados e passaram conforme confirmação do mantenedor em 2026-09-09:
 
 - schema das tabelas `simple_voting_option` e `simple_voting_vote` instalado;
-- unique constraint `(question_id, uid)`, inclusive sob requests concorrentes;
+- unique constraint `(question_id, uid)` validada sob requests concorrentes;
 - anônimo recebe `401` na API sem dados de negócio;
 - voto repetido retorna `409`;
 - opção pertencente a outra pergunta retorna `422`;
@@ -289,6 +295,8 @@ lando drush cr
 - nenhum IP bruto é persistido;
 - nenhum secret aparece em logs, respostas, commits ou dumps;
 - nenhum arquivo em `web/core`, contrib ou `vendor` foi alterado.
+
+A matriz de aceitação e o plano manual registram os cenários validados e devem ser atualizados junto com futuras alterações de comportamento.
 
 ## Estrutura do projeto
 
@@ -311,7 +319,7 @@ lando drush cr
 ## Documentação
 
 - [`docs/specification.md`](docs/specification.md): escopo e regras do sistema;
-- [`docs/architecture.md`](docs/architecture.md): arquitetura e decisões de engenharia para produção;
+- [`docs/architecture.md`](docs/architecture.md): arquitetura implementada e limitações conhecidas;
 - [`docs/openapi.yaml`](docs/openapi.yaml): contrato da API;
 - [`docs/permission-matrix.md`](docs/permission-matrix.md): autorização;
 - [`docs/domain-model.md`](docs/domain-model.md): agregados, tabelas, índices e cache;

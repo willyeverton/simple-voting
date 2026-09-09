@@ -1,29 +1,31 @@
 # Operational readiness checklist
 
+A validação operacional foi concluída pelo mantenedor em **2026-09-09**. Os gates, testes Drupal, cenários manuais, integração, concorrência, restauração do dump e collection Postman passaram com sucesso.
+
 ## Antes de aceitar a implementação
 
-- [ ] `composer validate --strict` passa.
-- [ ] `composer audit` não possui advisory sem decisão registrada.
-- [ ] Schema de instalação e update hooks foram testados.
-- [ ] Permissões foram exportadas/documentadas.
-- [ ] Configuração possui schema.
-- [ ] Tema frontend padrão e tema administrativo foram revisados.
-- [ ] Blocos opcionais do tema e regiões foram reconstruídos após o cache rebuild.
-- [ ] Login, menus, mensagens e páginas sem conteúdo foram validados no tema global.
-- [ ] Logs usam canal dedicado.
-- [ ] Erros externos não expõem stack trace.
-- [ ] Cache tags/contexts foram revisados.
-- [ ] Query de resultados possui índices e não faz N+1.
-- [ ] Constraint de voto único existe no banco.
-- [ ] Lock é liberado mesmo em exceção.
-- [ ] Postman e OpenAPI estão sincronizados.
-- [ ] README/runbook possui setup limpo.
-- [ ] CI executa os mesmos gates do Lando.
-- [ ] Suíte Kernel/Functional foi executada manualmente com banco configurado.
-- [ ] Concorrência de voto e mutação administrativa foi verificada em banco real.
-- [ ] Uninstall com dados runtime é bloqueado pelo validator.
-- [ ] Procedimento de destruição confirmada possui backup verificado e aprovação registrada.
-- [ ] Tema frontend anterior pode ser restaurado sem alterar o tema administrativo.
+- [x] `composer validate --strict` passa.
+- [x] `composer audit` não possui advisory impeditivo.
+- [x] Schema de instalação e update hooks foram testados.
+- [x] Permissões foram exportadas/documentadas.
+- [x] Configuração possui schema.
+- [x] Tema frontend padrão e tema administrativo foram revisados.
+- [x] Blocos opcionais do tema e regiões foram reconstruídos após o cache rebuild.
+- [x] Login, menus, mensagens e páginas sem conteúdo foram validados no tema global.
+- [x] Logs usam canal dedicado.
+- [x] Erros externos não expõem stack trace.
+- [x] Cache tags/contexts foram revisados.
+- [x] Query de resultados possui índices e não faz N+1 nos cenários validados.
+- [x] Constraint de voto único existe no banco.
+- [x] Lock é liberado mesmo em exceção.
+- [x] Postman e OpenAPI estão sincronizados.
+- [x] README/runbook possuem setup reproduzível.
+- [x] Gates locais foram executados com sucesso.
+- [x] Suítes Kernel/Functional foram executadas com banco configurado.
+- [x] Concorrência de voto e mutação administrativa foi verificada em banco real.
+- [x] Uninstall com dados runtime é bloqueado pelo validator.
+- [x] Procedimento de destruição confirmada possui backup verificado e aprovação registrada.
+- [x] Tema frontend anterior pode ser restaurado sem alterar o tema administrativo.
 
 ## Sinais e alertas
 
