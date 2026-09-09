@@ -16,11 +16,26 @@ services:
       - '@entity_type.manager'
       - '@file.usage'
       - '@cache_tags.invalidator'
+      - '@simple_voting.mutation_lock'
 
   simple_voting.vote_storage:
     class: Drupal\simple_voting\Service\VoteStorage
     arguments:
       - '@database'
+
+  simple_voting.mutation_lock:
+    class: Drupal\simple_voting\Service\VotingMutationLock
+    arguments:
+      - '@lock'
+
+  simple_voting.question_persistence:
+    class: Drupal\simple_voting\Service\QuestionPersistenceService
+    arguments:
+      - '@database'
+      - '@simple_voting.option_storage'
+      - '@simple_voting.mutation_lock'
+      - '@cache_tags.invalidator'
+      - '@logger.channel.simple_voting'
 
   simple_voting.voting:
     class: Drupal\simple_voting\Service\VotingService
@@ -30,7 +45,7 @@ services:
       - '@simple_voting.question_read'
       - '@simple_voting.option_storage'
       - '@simple_voting.vote_storage'
-      - '@lock'
+      - '@simple_voting.mutation_lock'
       - '@datetime.time'
       - '@cache_tags.invalidator'
       - '@logger.channel.simple_voting'
@@ -47,9 +62,27 @@ services:
   simple_voting.question_deletion:
     class: Drupal\simple_voting\Service\QuestionDeletionService
     arguments:
+      - '@database'
       - '@simple_voting.option_storage'
       - '@simple_voting.vote_storage'
+      - '@simple_voting.mutation_lock'
       - '@cache_tags.invalidator'
+      - '@logger.channel.simple_voting'
+
+  simple_voting.api_access:
+    class: Drupal\simple_voting\Access\VotingApiAccessCheck
+
+  simple_voting.results_access:
+    class: Drupal\simple_voting\Access\VotingResultsAccessCheck
+
+  simple_voting.uninstall_validator:
+    class: Drupal\simple_voting\UninstallValidator\SimpleVotingUninstallValidator
+    arguments:
+      - '@database'
+      - '@state'
+      - '@string_translation'
+    tags:
+      - { name: module_install.uninstall_validator }
 
   simple_voting.api_serializer:
     class: Drupal\simple_voting\Service\VotingApiSerializer
@@ -61,5 +94,13 @@ services:
     class: Drupal\simple_voting\EventSubscriber\VotingApiExceptionSubscriber
     arguments:
       - '@logger.channel.simple_voting'
+    tags:
+      - { name: event_subscriber }
+
+  simple_voting.config_import_subscriber:
+    class: Drupal\simple_voting\EventSubscriber\VotingConfigImportSubscriber
+    arguments:
+      - '@database'
+      - '@string_translation'
     tags:
       - { name: event_subscriber }

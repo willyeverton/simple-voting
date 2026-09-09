@@ -114,10 +114,34 @@ function simple_voting_set_default_theme(): void {
     \Drupal::service('theme_installer')->install(['simple_voting_theme']);
   }
 
-  \Drupal::configFactory()
-    ->getEditable('system.theme')
-    ->set('default', 'simple_voting_theme')
-    ->save();
+  $theme_config = \Drupal::configFactory()->getEditable('system.theme');
+  $current_default = (string) $theme_config->get('default');
+  if ($current_default !== 'simple_voting_theme') {
+    $state = \Drupal::state();
+    if ($state->get('simple_voting.previous_default_theme') === NULL) {
+      $state->set('simple_voting.previous_default_theme', $current_default);
+    }
+    $theme_config->set('default', 'simple_voting_theme')->save();
+  }
+}
+
+/**
+ * Restores the frontend theme that was active before Simple Voting.
+ */
+function simple_voting_restore_previous_theme(): void {
+  $state = \Drupal::state();
+  $previous = $state->get('simple_voting.previous_default_theme');
+  $theme_handler = \Drupal::service('theme_handler');
+  $theme_config = \Drupal::configFactory()->getEditable('system.theme');
+
+  if (is_string($previous)
+    && $previous !== ''
+    && $theme_config->get('default') === 'simple_voting_theme'
+    && $theme_handler->themeExists($previous)) {
+    $theme_config->set('default', $previous)->save();
+  }
+
+  $state->delete('simple_voting.previous_default_theme');
 }
 
 /**
@@ -237,6 +261,9 @@ function simple_voting_update_11005(): void {
  * Implements hook_uninstall().
  */
 function simple_voting_uninstall(): void {
+  simple_voting_restore_previous_theme();
+  \Drupal::state()->delete('simple_voting.allow_destructive_uninstall');
+
   $database = \Drupal::database();
   foreach (['simple_voting_vote', 'simple_voting_option'] as $table) {
     if ($database->schema()->tableExists($table)) {

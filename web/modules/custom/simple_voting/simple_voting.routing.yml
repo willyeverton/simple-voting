@@ -13,6 +13,7 @@ simple_voting.questions:
     _title: 'Voting questions'
   requirements:
     _permission: 'vote in polls'
+    _user_is_logged_in: 'TRUE'
 
 simple_voting.vote:
   path: '/voting/{question_id}'
@@ -21,6 +22,7 @@ simple_voting.vote:
     _title_callback: '\Drupal\simple_voting\Controller\VotingPageController::title'
   requirements:
     _permission: 'vote in polls'
+    _user_is_logged_in: 'TRUE'
     question_id: '[a-z0-9][a-z0-9_]{1,127}'
 
 simple_voting.results:
@@ -29,7 +31,7 @@ simple_voting.results:
     _controller: '\Drupal\simple_voting\Controller\VotingResultsController::results'
     _title_callback: '\Drupal\simple_voting\Controller\VotingResultsController::title'
   requirements:
-    _permission: 'vote in polls'
+    _custom_access: 'simple_voting.results_access:access'
     question_id: '[a-z0-9][a-z0-9_]{1,127}'
 
 simple_voting.api.questions:
@@ -42,7 +44,7 @@ simple_voting.api.questions:
     _auth: ['basic_auth', 'cookie']
     _simple_voting_api: true
   requirements:
-    _permission: 'access simple voting API'
+    _custom_access: 'simple_voting.api_access:access'
 
 simple_voting.api.question:
   path: '/api/v1/questions/{question_id}'
@@ -54,7 +56,7 @@ simple_voting.api.question:
     _auth: ['basic_auth', 'cookie']
     _simple_voting_api: true
   requirements:
-    _permission: 'access simple voting API'
+    _custom_access: 'simple_voting.api_access:access'
     question_id: '[a-z0-9][a-z0-9_]{1,127}'
 
 simple_voting.api.vote:
@@ -68,7 +70,7 @@ simple_voting.api.vote:
     _csrf_request_header_token: 'TRUE'
     _simple_voting_api: true
   requirements:
-    _permission: 'access simple voting API'
+    _custom_access: 'simple_voting.api_access:access'
     question_id: '[a-z0-9][a-z0-9_]{1,127}'
 
 simple_voting.api.results:
@@ -81,5 +83,5 @@ simple_voting.api.results:
     _auth: ['basic_auth', 'cookie']
     _simple_voting_api: true
   requirements:
-    _permission: 'access simple voting API'
+    _custom_access: 'simple_voting.api_access:access'
     question_id: '[a-z0-9][a-z0-9_]{1,127}'
