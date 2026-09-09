@@ -19,3 +19,4 @@ A decisão deve ser revisitada se surgirem requisitos de revisão, tradução, w
 - O identificador pode ser estável para rotas e API.
 - A definição da pergunta pode ser separada dos dados transacionais de voto.
 - A escolha precisa ser refletida em schema, cache tags, update hooks e testes de integração.
+- O identificador é imutável após a criação também fora do formulário. Importações ou alterações programáticas que tentem renomeá-lo devem ser rejeitadas, porque opções e votos usam o identificador como referência transacional.

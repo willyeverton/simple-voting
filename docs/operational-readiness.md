@@ -19,6 +19,11 @@
 - [ ] Postman e OpenAPI estão sincronizados.
 - [ ] README/runbook possui setup limpo.
 - [ ] CI executa os mesmos gates do Lando.
+- [ ] Suíte Kernel/Functional foi executada manualmente com banco configurado.
+- [ ] Concorrência de voto e mutação administrativa foi verificada em banco real.
+- [ ] Uninstall com dados runtime é bloqueado pelo validator.
+- [ ] Procedimento de destruição confirmada possui backup verificado e aprovação registrada.
+- [ ] Tema frontend anterior pode ser restaurado sem alterar o tema administrativo.
 
 ## Sinais e alertas
 

@@ -18,7 +18,7 @@
 | Acesso administrativo indevido | Rota/form/API | Permissions + access checks | Functional test |
 | CSRF | POST por cookie | Header CSRF e proteção de rota | Functional API test |
 | XSS | Título/descrição/imagem | Form API validation + escape/filter | Security test |
-| Upload malicioso | Arquivo executável ou excessivo | Extensão, MIME, tamanho, destino e uso | Upload test |
+| Upload malicioso | Arquivo executável ou excessivo | Extensão, MIME, tamanho, destino e uso validados no formulário e no storage; arquivos sem uso do diretório do módulo são marcados temporários para limpeza pelo cron | Upload test |
 | Enumeração | IDs e resultados | Respostas consistentes e autorização | API/security test |
 | Vazamento de segredo | Logs/config/CI | Env vars, redaction, revisão de diff | Manual/CI |
 | SQL injection | Payloads de API | DB API/Query Builder e parâmetros | Code review/test |
@@ -32,7 +32,8 @@
 - Nunca registrar senha, Basic Auth, CSRF token ou payload completo.
 - Não retornar identificadores internos do banco sem necessidade.
 - Usar canal `simple_voting` e severidade adequada.
-- Associar exceções inesperadas ao evento sem expor a exceção ao cliente.
+- Associar exceções inesperadas a um `X-Request-ID` seguro sem expor a exceção ao cliente.
+- Registrar somente a classe da exceção e contexto operacional mínimo; nunca o objeto completo da exceção ou payload bruto.
 
 ## Dependências
 

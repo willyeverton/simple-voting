@@ -32,8 +32,8 @@ Cada requisito funcional e não funcional deve apontar para uma evidência verif
 | FR-026 autenticação e permissões da API | permissions/OpenAPI | AC-033 | ADR-0003 | Functional API |
 | NFR-001 código customizado isolado | AGENTS/domain | AC-031 | ADR-0001/0005 | Review gate |
 | NFR-002 regras em Services | architecture | AC-032 | ADR-0004 | Unit test |
-| NFR-003 segurança server-side | threat-model | AC-005, AC-018, AC-019, AC-020 | ADR-0003 | Security/functional |
-| NFR-004 integridade concorrente | domain/flows | AC-012, AC-013, AC-014 | ADR-0002 | Integration |
+| NFR-003 segurança server-side | threat-model | AC-005, AC-018, AC-019, AC-020, AC-041 | ADR-0003 | Security/functional |
+| NFR-004 integridade concorrente | domain/flows | AC-012, AC-013, AC-014, AC-040 | ADR-0002 | Integration |
 | NFR-005 observabilidade | operational | AC-020, AC-028 | threat/runbook | Log assertion |
 | NFR-006 performance/N+1 | domain/operational | AC-021, AC-035 | ADR-0002/0005/0008 | Query review |
 | NFR-007 dependências/gates | quality harness | AC-022, AC-023 | ADR-0004 | CI/Lando |

@@ -53,7 +53,7 @@ INDEX(uid)
 INDEX(question_id, weight) em opções
 ```
 
-A aplicação deve validar referências de pergunta/opção antes do insert. A constraint de unicidade é a autoridade final contra corrida. Consultas de contagem devem ser centralizadas no `VotingResultsService` para evitar divergência entre CMS, bloco e API.
+A aplicação deve validar referências de pergunta/opção antes do insert. A constraint de unicidade é a autoridade final contra corrida. Como a Schema API do Drupal não aplica foreign keys físicas para tabelas customizadas, voto, sincronização de opções e exclusão usam a mesma chave de lock por pergunta. Consultas de contagem devem ser centralizadas no `VotingResultsService` para evitar divergência entre CMS, bloco e API.
 
 ## Política de exclusão
 
@@ -69,9 +69,12 @@ Tags mínimas sugeridas:
 ```text
 config:simple_voting.settings
 config:simple_voting.question.{id}
+config:voting_question_list
 simple_voting:question:{id}
 simple_voting:question-list
 ```
+
+`config:voting_question_list` é a tag nativa da entidade de configuração e deve ser usada junto da tag customizada para cobrir alterações diretas e importações de configuração.
 
 Contexts relevantes:
 

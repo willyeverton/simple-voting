@@ -50,6 +50,7 @@ Conceda as permissões do módulo a roles locais de teste sem versionar credenci
 lando phpcs
 lando phpstan
 lando phpunit
+lando phpunit-drupal
 lando quality
 ```
 
@@ -88,3 +89,41 @@ docker ps
 ```
 
 Não execute `lando destroy`, `lando rebuild`, `git reset --hard` ou limpeza de volumes sem confirmar o impacto e a necessidade.
+
+## Testes Drupal e concorrência
+
+`lando phpunit` executa a suíte Unit configurada em `phpunit.xml.dist`. Com um banco Drupal configurado, execute também a suíte Kernel/Functional:
+
+```bash
+lando ssh
+export SIMPLETEST_DB='mysql://USUARIO:SENHA@database/NOME_DO_BANCO'
+export SIMPLETEST_BASE_URL='https://simple-voting.lndo.site'
+vendor/bin/phpunit --configuration=phpunit.drupal.xml.dist
+```
+
+A concorrência deve ser validada em banco real com dois requests simultâneos para a mesma pergunta/usuário e com um request de voto concorrente a uma alteração administrativa de opções. O resultado esperado é no máximo um voto e nenhuma referência a opção órfã. O lock Drupal usa uma vida útil de 30 segundos e espera entre tentativas; a verificação deve incluir uma operação deliberadamente lenta o suficiente para demonstrar que a proteção permanece ativa durante a transação.
+
+Erros da API retornam `X-Request-ID`. Ao investigar uma falha, associe esse valor aos eventos do canal `simple_voting`. Não registre nem solicite senhas, tokens, payloads completos ou IP bruto durante o diagnóstico.
+
+## Tema frontend
+
+A instalação e os updates do módulo mantêm a ativação automática de `simple_voting_theme`, sem alterar o tema administrativo. O tema frontend anterior é guardado para rollback. Se for necessário restaurá-lo:
+
+```bash
+lando drush config:set system.theme default NOME_DO_TEMA -y
+lando drush cr
+```
+
+Confirme antes que o tema anterior continua instalado e que a troca não interfere no tema administrativo.
+
+## Desinstalação destrutiva
+
+O uninstall é bloqueado quando existem opções ou votos runtime. A remoção só pode ocorrer após backup verificado e confirmação operacional explícita:
+
+```bash
+lando drush sql:dump --result-file=/app/backup/simple-voting-before-uninstall.sql
+lando drush state:set simple_voting.allow_destructive_uninstall 1
+lando drush pm:uninstall simple_voting -y
+```
+
+O backup deve ser armazenado fora do diretório público e validado antes da confirmação. Não habilite `simple_voting.allow_destructive_uninstall` em uma operação rotineira ou sem aprovação registrada.

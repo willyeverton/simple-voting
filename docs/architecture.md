@@ -109,11 +109,14 @@ web/modules/custom/simple_voting/
 - `OptionStorage`: persiste opções e File API usage;
 - `VoteStorage`: persiste e consulta votos;
 - `VotingService`: único caminho para registrar voto;
+- `QuestionPersistenceService`: persiste pergunta e opções sob a mesma transação/lock;
+- `VotingMutationLock`: lock compartilhado por pergunta para voto e mutações administrativas;
 - `VotingResultsService`: único cálculo de contagem e percentual;
 - `VotingVisibilityService`: aplica a política de resultados públicos/ocultos;
 - `QuestionDeletionService`: impede remoção com votos;
 - `VotingApiSerializer`: converte o domínio para o contrato versionado;
-- `VotingApiExceptionSubscriber`: transforma falhas somente em rotas API.
+- `VotingApiExceptionSubscriber`: transforma falhas somente em rotas API;
+- `VotingConfigImportSubscriber`: impede rename de IDs e remoção de perguntas com dados runtime durante importação.
 
 Controllers, Forms e Block fazem composição e apresentação. Não devem criar regras alternativas nem repetir queries de resultados.
 
@@ -125,7 +128,7 @@ Todos os serviços são obtidos por dependency injection; consumidores não usam
 
 O tema não contém regras de votação, validação de payload, autorização, persistência, cálculo de resultados ou decisões de cache de domínio. Login/logout e visibilidade de menus continuam sendo controlados pelos menus e permissões nativas do Drupal. A apresentação usa Twig, render arrays e CSS sem React ou dependência frontend adicional.
 
-A mudança do tema padrão é operacional e reversível por configuração Drupal. Após a instalação/atualização, o cache de descoberta deve ser reconstruído e as regiões/blocos opcionais devem ser revisados no ambiente real.
+A mudança do tema padrão é operacional e reversível por configuração Drupal. O módulo guarda o tema frontend anterior em State somente quando troca um valor diferente e não altera o tema administrativo. Após a instalação/atualização, o cache de descoberta deve ser reconstruído e as regiões/blocos opcionais devem ser revisados no ambiente real.
 
 ## 5. Fluxo de administração
 
@@ -135,8 +138,9 @@ A mudança do tema padrão é operacional e reversível por configuração Drupa
 4. O `ConfigEntityStorage` salva a definição da pergunta.
 5. `OptionStorage` sincroniza as opções em operação controlada.
 6. Opções removidas são bloqueadas quando possuem votos.
-7. Arquivos aceitos são enviados para `public://simple_voting/options/`, tornam-se permanentes e recebem registro em `file_usage`.
-8. Tags da pergunta e da listagem são invalidadas após a alteração.
+7. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a persistência da opção, e tornam-se permanentes com registro em `file_usage` dentro da mesma transação do banco.
+8. Em rollback, a linha da opção, o estado da entidade File e o registro de `file_usage` retornam juntos; arquivos temporários sem uso ficam sujeitos à limpeza do cron.
+9. Tags da pergunta e da listagem são invalidadas após a alteração.
 
 A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos não podem ser removidas; devem ser fechadas/arquivadas. Isso preserva auditoria e evita votos órfãos.
 
@@ -145,22 +149,26 @@ A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos
 `VotingService::castVote()` aplica as regras na seguinte ordem:
 
 1. exige UID autenticado;
-2. verifica `voting_enabled`;
-3. carrega a pergunta;
-4. exige status aberto;
-5. valida `question_id + option_id` em conjunto;
-6. adquire lock determinístico por pergunta/usuário;
+2. adquire lock determinístico por pergunta, compartilhado com mutações administrativas;
+3. verifica `voting_enabled`;
+4. carrega a pergunta;
+5. exige status aberto;
+6. valida `question_id + option_id` em conjunto sob o lock;
 7. inicia transação;
 8. verifica voto existente;
 9. insere o voto;
 10. converte violação da constraint em `DuplicateVoteException`;
-11. invalida cache após sucesso;
+11. confirma a transação e invalida cache após sucesso;
 12. libera o lock em `finally`.
 
 A proteção possui duas camadas:
 
-- **lock de aplicação:** reduz corridas previsíveis e evita trabalho duplicado;
-- **constraint de banco:** continua funcionando em múltiplos workers, hosts ou caminhos alternativos.
+- **lock de aplicação por pergunta:** serializa voto, sincronização de opções e exclusão para evitar que uma opção seja removida entre a validação e a persistência do voto;
+- **constraint de banco:** a chave única continua funcionando em múltiplos workers, hosts ou caminhos alternativos.
+
+O segundo argumento de `LockBackendInterface::acquire()` é a vida útil do lock, não um timeout de espera. `VotingMutationLock` usa uma vida útil de 30 segundos e chama `wait()` entre tentativas não bloqueantes. O limite deve cobrir a operação transacional; caso uma operação administrativa passe a executar trabalho mais longo, a política deve ser revisada ou o lock renovado explicitamente.
+
+A Schema API do Drupal não cria foreign keys físicas para tabelas customizadas. Por isso, a integridade entre opções e votos depende do lock compartilhado, das transações e da política de não remover opções que já possuem votos.
 
 Falhas são transformadas em resultados seguros:
 
@@ -179,11 +187,11 @@ Nenhum caminho de erro retorna SQL, stack trace, token ou detalhes internos.
 
 O projeto diferencia visibilidade histórica de elegibilidade para mutação, conforme o [ADR-0011](adr/0011-question-discoverability.md):
 
-- a listagem da API contém somente perguntas abertas disponíveis para votação;
+- a listagem da API contém somente perguntas abertas disponíveis para votação quando `voting_enabled` está habilitado; quando desabilitado, retorna catálogo vazio;
 - o detalhe da API pode retornar uma pergunta fechada conhecida com `status: closed`;
 - o CMS pode exibir perguntas fechadas como somente leitura;
 - pergunta fechada nunca aceita voto;
-- `voting_enabled` bloqueia novas escritas; a listagem CMS exibe somente uma mensagem de indisponibilidade enquanto a configuração estiver desabilitada.
+- `voting_enabled` bloqueia novas escritas; a listagem CMS exibe somente uma mensagem de indisponibilidade e a listagem API retorna catálogo vazio enquanto a configuração estiver desabilitada.
 - A configuração não apaga nem oculta resultados históricos autorizados.
 
 Essa separação evita usar `404` para representar um recurso que existe, mas não aceita mutação.
@@ -216,7 +224,7 @@ Toda a API requer autenticação Drupal via Basic Auth sobre HTTPS ou sessão Dr
 
 ### Logs
 
-O módulo usa o canal `simple_voting`. Logs podem registrar UID, question ID, endpoint e código de falha quando operacionalmente necessário, mas não registram senhas, Basic Auth, CSRF tokens, IP bruto ou payload completo.
+O módulo usa o canal `simple_voting`. Logs podem registrar UID, question ID, endpoint, código de falha e um `X-Request-ID` validado quando operacionalmente necessário, mas não registram senhas, Basic Auth, CSRF tokens, IP bruto, payload completo ou objetos de exceção.
 
 ## 9. Read model de resultados
 
@@ -237,6 +245,7 @@ Tags principais:
 ```text
 config:simple_voting.settings
 config:simple_voting.question.{id}
+config:voting_question_list
 simple_voting:question:{id}
 simple_voting:question-list
 ```
@@ -269,6 +278,8 @@ A collection Postman é parte do contrato de integração e deve ser atualizada 
 ### Configuração versus dados
 
 - perguntas são configuração e podem ser promovidas via Configuration Management;
+- identificadores de perguntas não podem ser renomeados durante importação;
+- perguntas com opções ou votos runtime não podem ser removidas durante importação;
 - opções e votos são dados runtime e não devem ser tratados como configuração deployável;
 - dumps devem excluir credenciais, tokens e dados pessoais desnecessários;
 - `settings.php`, `settings.local.php`, senhas e variáveis de ambiente não entram no Git.
@@ -305,7 +316,7 @@ A pirâmide está detalhada em [`docs/test-plan.md`](test-plan.md):
 - **Functional:** rotas, permissões, formulários, autenticação, CSRF e envelopes JSON;
 - **Integração:** constraint real e requests concorrentes no banco.
 
-Os testes presentes no repositório são evidência inicial. A aceitação produtiva ainda depende da execução dos comandos Lando, da integração concorrente e da revisão de segurança/arquitetura.
+Os testes Unit, Kernel e Functional são executados pelas configurações correspondentes no Lando e no CI. A aceitação produtiva ainda depende da repetição dos gates após cada alteração, da verificação de concorrência com banco real, da execução da collection/manual plan e da revisão de segurança/arquitetura.
 
 ## 14. Evolução além do desafio
 

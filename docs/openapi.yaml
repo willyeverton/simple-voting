@@ -5,6 +5,7 @@ info:
   description: |
     Contrato inicial da API manual do desafio Simple Voting.
     A implementação deve validar autenticação, permissões, CSRF e regras de domínio no Drupal.
+    Respostas de erro incluem o header X-Request-ID para correlação operacional segura.
 servers:
   - url: https://simple-voting.lndo.site
     description: Ambiente Lando local
@@ -23,7 +24,7 @@ paths:
     get:
       tags: [Questions]
       summary: Lista perguntas disponíveis
-      description: Retorna somente perguntas abertas e elegíveis para votação. Uma pergunta fechada conhecida continua consultável pelo endpoint de detalhe.
+      description: Retorna somente perguntas abertas e elegíveis para votação quando a votação global está habilitada. Quando `voting_enabled` está desabilitado, retorna `data` vazio. Uma pergunta fechada conhecida continua consultável pelo endpoint de detalhe.
       operationId: listQuestions
       responses:
         '200':

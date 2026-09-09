@@ -11,11 +11,11 @@ O brief original define “perguntas disponíveis” para a API, mas não define
 
 Separar visibilidade histórica de elegibilidade para voto:
 
-- `GET /api/v1/questions` retorna somente perguntas abertas, pois representa o catálogo de perguntas disponíveis para votação externa;
+- `GET /api/v1/questions` retorna somente perguntas abertas quando a votação global está habilitada; quando `voting_enabled` está desabilitado, retorna um catálogo vazio;
 - `GET /api/v1/questions/{question_id}` pode retornar uma pergunta conhecida fechada, com `status: closed`, sem permitir mutação;
 - a listagem CMS pode mostrar perguntas abertas e fechadas, sempre marcando as fechadas e sem renderizar controles de voto;
 - resultados continuam protegidos por `show_results` e pela permissão `view voting results`;
-- `voting_enabled` bloqueia escritas no CMS e na API, mas não apaga nem oculta automaticamente resultados históricos autorizados;
+- `voting_enabled` bloqueia escritas no CMS e na API e oculta o catálogo de novas votações no CMS e na API, mas não apaga nem oculta automaticamente resultados históricos autorizados;
 - `VotingService` é a autoridade final para rejeitar votos em perguntas fechadas ou quando a votação global está desabilitada.
 
 ## Consequências

@@ -10,8 +10,9 @@ Cobrir:
 
 - Novo voto.
 - Duplicidade detectada por leitura.
-- Constraint violation convertida em duplicidade.
-- Lock indisponível.
+- Constraint violation convertida em duplicidade somente quando o voto já existe.
+- Falha inesperada de insert convertida em falha de persistência.
+- Lock indisponível, espera entre tentativas e vida útil suficiente para a seção crítica.
 - Liberação no `finally`.
 - Pergunta fechada/desabilitada.
 - Opção incompatível.
@@ -62,8 +63,10 @@ Cobrir:
 - Dois inserts concorrentes para o mesmo usuário/pergunta.
 - Requests para usuários diferentes.
 - Retry após `409`.
-- Lock compartilhado quando houver mais de um worker.
+- Lock compartilhado por pergunta quando houver mais de um worker ou mutação administrativa concorrente.
 - Falha durante insert e liberação de lock.
+- Voto concorrente com remoção/alteração de opção não cria referência órfã.
+- Falha de persistência de opção não deixa `file_usage` ou arquivo em estado incompatível com o banco.
 - Ausência de IP bruto no registro persistido.
 
 ## Gates por mudança

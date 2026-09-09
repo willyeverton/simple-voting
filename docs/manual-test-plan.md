@@ -289,6 +289,8 @@ A API deve ser validada usando a collection Postman versionada em:
 - <ref_file file="/home/willy/Develop/simple-voting/docs/openapi.yaml" />
 - <ref_file file="/home/willy/Develop/simple-voting/postman/simple-voting.postman_collection.json" />
 
+A collection possui assertions para respostas de sucesso. Os cenários de erro (`401`, `403`, `409`, `422` e `503`) continuam sendo executados pelas requisições manuais descritas abaixo, sem reutilizar credenciais ou tokens em arquivos versionados.
+
 ## 8. Importar e configurar a collection
 
 No Postman:
@@ -330,7 +332,7 @@ Resultado esperado:
 - somente perguntas abertas e disponíveis;
 - nenhuma identidade de votante.
 
-Uma pergunta fechada não deve aparecer na listagem da API, embora continue consultável diretamente pelo identificador.
+Com `Enable voting` desabilitado, repita a requisição e confirme HTTP `200` com `data` vazio. Uma pergunta fechada não deve aparecer na listagem da API, embora continue consultável diretamente pelo identificador.
 
 ## 10. Consultar uma pergunta
 

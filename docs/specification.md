@@ -1,8 +1,8 @@
 # Simple Voting — Especificação do sistema
 
-**Status:** proposta inicial para orientar a implementação
+**Status:** especificação vigente para a implementação e validação
 **Fonte:** desafio técnico de Sistema de Votação Simples
-**Escopo atual:** especificação e harness; nenhuma funcionalidade de votação está implementada.
+**Escopo atual:** módulo customizado implementado; esta documentação, os testes e as verificações operacionais permanecem como fonte de aceitação.
 
 ## 1. Objetivo
 
@@ -39,6 +39,7 @@ A solução deve ser segura, modular, observável, testável e capaz de preserva
 - Confirmar o voto sem revelar resultados quando a pergunta estiver configurada para ocultá-los.
 - Exibir resultados quando permitido.
 - Bloquear a votação globalmente desabilitada; se o lifecycle aberto/fechado for adotado, bloquear perguntas fechadas.
+- Quando a votação global estiver desabilitada, o catálogo CMS fica indisponível e a listagem API retorna `data` vazio.
 
 ### 3.3 API manual
 
@@ -90,7 +91,7 @@ Capacidades obrigatórias:
 
 ## 7. Concorrência e performance
 
-A solução deve suportar duplo clique, retries e workers concorrentes. A implementação deve combinar a constraint única do banco com lock de aplicação quando necessário. O lock deve ser liberado em `finally` e uma violação de unicidade deve ser tratada como duplicidade de negócio.
+A solução deve suportar duplo clique, retries e workers concorrentes. A implementação deve combinar a constraint única do banco com um lock de aplicação por pergunta para voto e mutações administrativas concorrentes. O lock deve ser liberado em `finally` e uma violação de unicidade deve ser tratada como duplicidade de negócio.
 
 Os endpoints de leitura devem evitar consultas repetidas e podem utilizar cache com invalidação específica por pergunta. A estratégia final deve ser documentada em um ADR e validada por testes de integração.
 

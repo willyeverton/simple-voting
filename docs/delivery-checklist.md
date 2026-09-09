@@ -2,16 +2,18 @@
 
 Este checklist separa o que já está preparado do que depende da implementação e da configuração final do ambiente.
 
+> As evidências marcadas foram informadas pelo usuário após a execução dos comandos. Como ajustes de código foram aplicados depois dessa execução, os gates devem ser repetidos antes da entrega final. O dump restaurável continua pendente.
+
 ## Repositório e ambiente
 
 - [x] Projeto inicializado com Git.
-- [ ] Remote GitHub configurado.
+- [x] Remote GitHub configurado.
 - [x] Lando configurado.
 - [x] Drupal 11 via Composer.
 - [x] PHP 8.5 no container.
 - [x] MySQL 8.4 no container.
 - [x] Drush instalado no projeto.
-- [ ] Site Drupal instalado com dados de demonstração.
+- [x] Site Drupal instalado com dados de demonstração.
 - [ ] Dump restaurável em `dump/`.
 
 ## Documentação
@@ -59,14 +61,14 @@ Este checklist separa o que já está preparado do que depende da implementaçã
 - [x] Composer validate.
 - [x] Composer audit.
 - [x] Quality harness Lando.
-- [ ] PHPCS com código customizado.
-- [ ] PHPStan com código customizado.
-- [ ] PHPUnit com testes do módulo.
-- [ ] Testes Kernel.
-- [ ] Testes funcionais.
-- [ ] Teste funcional do tema global e menus.
-- [ ] Teste de concorrência com banco real.
-- [ ] Execução completa da collection Postman.
+- [x] PHPCS com código customizado.
+- [x] PHPStan com código customizado.
+- [x] PHPUnit com testes do módulo.
+- [x] Testes Kernel.
+- [x] Testes funcionais.
+- [x] Teste funcional do tema global e menus.
+- [x] Teste de concorrência com banco real.
+- [x] Execução completa da collection Postman.
 - [ ] Restauração do dump em ambiente limpo.
 
 ## Critério de entrega

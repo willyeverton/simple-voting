@@ -25,4 +25,4 @@ A mensagem externa deve ser segura e estável; detalhes técnicos ficam no log d
 }
 ```
 
-Não retornar stack trace, SQL, nomes de tabelas, tokens ou dados do votante.
+Não retornar stack trace, SQL, nomes de tabelas, tokens ou dados do votante. Respostas de erro podem incluir `X-Request-ID`, que deve ser usado somente para correlação operacional.

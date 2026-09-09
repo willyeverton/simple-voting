@@ -17,7 +17,7 @@ A API adota autenticação obrigatória por padrão. A permissão técnica de ac
 | Consultar resultado oculto | Não | Não por padrão | Sim | `access simple voting API` + `view voting results` |
 | Acessar interface CMS de votação | Não | Sim | Sim | `vote in polls` |
 | Registrar voto no CMS | Não | Sim | Sim | `vote in polls` + Form API CSRF |
-| Consultar resultado no CMS | Não | Sim | Sim | `vote in polls`; resultado oculto mostra confirmação sem números |
+| Consultar resultado no CMS | Não | Sim | Sim | `vote in polls` para acesso à votação; `view voting results` libera resultado oculto; sem essa permissão mostra confirmação sem números |
 | Consultar logs | Não | Não | Operação autorizada | Permissão Drupal de logs/ambiente |
 
 ## Regras complementares
