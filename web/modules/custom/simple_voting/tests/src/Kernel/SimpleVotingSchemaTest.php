@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\simple_voting\Kernel;
 
+use Drupal\Core\Database\IntegrityConstraintViolationException;
 use Drupal\KernelTests\KernelTestBase;
 
 /**
@@ -14,7 +15,7 @@ final class SimpleVotingSchemaTest extends KernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['system', 'user', 'file', 'simple_voting'];
+  protected static $modules = ['system', 'user', 'file', 'block', 'simple_voting'];
 
   /**
    * {@inheritdoc}
@@ -44,6 +45,23 @@ final class SimpleVotingSchemaTest extends KernelTestBase {
     \simple_voting_update_11003();
     $update_manager = $this->container->get('entity.definition_update_manager');
     self::assertArrayHasKey('voting_question', $update_manager->getEntityTypes());
+  }
+
+  /**
+   * The database rejects a second vote for the same question and user.
+   */
+  public function testQuestionAndUserVoteCombinationIsUnique(): void {
+    $database = $this->container->get('database');
+    $fields = [
+      'question_id' => 'example_question',
+      'option_id' => 1,
+      'uid' => 10,
+      'timestamp' => 1,
+    ];
+    $database->insert('simple_voting_vote')->fields($fields)->execute();
+
+    $this->expectException(IntegrityConstraintViolationException::class);
+    $database->insert('simple_voting_vote')->fields($fields)->execute();
   }
 
 }

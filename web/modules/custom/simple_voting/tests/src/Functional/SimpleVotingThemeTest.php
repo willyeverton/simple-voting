@@ -14,7 +14,7 @@ final class SimpleVotingThemeTest extends BrowserTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['simple_voting'];
+  protected static $modules = ['block', 'simple_voting'];
 
   /**
    * {@inheritdoc}
@@ -44,6 +44,20 @@ final class SimpleVotingThemeTest extends BrowserTestBase {
 
     $this->assertSession()->linkExists('Log out');
     $this->assertSession()->linkExists('Voting questions');
+  }
+
+  /**
+   * Repeated theme updates preserve the original frontend theme for rollback.
+   */
+  public function testThemeUpdateStoresPreviousFrontendThemeOnce(): void {
+    $theme_config = \Drupal::configFactory()->getEditable('system.theme');
+    $theme_config->set('default', 'stark')->save();
+
+    \simple_voting_update_11004();
+    self::assertSame('stark', \Drupal::state()->get('simple_voting.previous_default_theme'));
+
+    \simple_voting_update_11004();
+    self::assertSame('stark', \Drupal::state()->get('simple_voting.previous_default_theme'));
   }
 
   /**

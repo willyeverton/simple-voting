@@ -14,7 +14,7 @@ final class SimpleVotingCmsTest extends BrowserTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['simple_voting'];
+  protected static $modules = ['block', 'simple_voting'];
 
   /**
    * {@inheritdoc}
@@ -30,6 +30,29 @@ final class SimpleVotingCmsTest extends BrowserTestBase {
 
     self::assertSame('main', $definition['menu_name']);
     self::assertSame('simple_voting.questions', $definition['route_name']);
+  }
+
+  /**
+   * The disabled catalogue does not expose question links.
+   */
+  public function testHiddenResultsPermissionCanReachCmsResults(): void {
+    $account = $this->drupalCreateUser(['view voting results']);
+    $this->drupalLogin($account);
+
+    $question = \Drupal::entityTypeManager()
+      ->getStorage('voting_question')
+      ->create([
+        'id' => 'hidden_question',
+        'title' => 'Hidden question',
+        'status' => FALSE,
+        'show_results' => FALSE,
+      ]);
+    $question->save();
+
+    $this->drupalGet('/voting/hidden_question/results');
+
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->pageTextContains('No votes have been registered.');
   }
 
   /**
