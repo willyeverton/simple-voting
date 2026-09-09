@@ -67,6 +67,8 @@ lando drush cr
 
 Se o site já estiver instalado, pule o instalador e execute apenas a habilitação/atualização do módulo.
 
+O uninstall do módulo é bloqueado quando existem opções ou votos. Uma remoção destrutiva exige backup verificado e confirmação operacional explícita por meio do procedimento documentado em [`docs/runbook.md`](docs/runbook.md).
+
 Ao instalar o módulo em um site novo, ou ao aplicar `updb` em um site existente, o tema `simple_voting_theme` é instalado e definido como tema frontend padrão. O tema administrativo configurado não é alterado.
 
 Para restaurar outro tema frontend posteriormente:
@@ -123,7 +125,7 @@ A API manual não usa JSON:API para a lógica central. Todos os endpoints exigem
 
 | Método | Endpoint | Finalidade |
 |---|---|---|
-| `GET` | `/api/v1/questions` | Lista perguntas abertas disponíveis para votação |
+| `GET` | `/api/v1/questions` | Lista perguntas abertas disponíveis; retorna catálogo vazio quando a votação global está desabilitada |
 | `GET` | `/api/v1/questions/{question_id}` | Consulta uma pergunta conhecida, inclusive fechada |
 | `POST` | `/api/v1/questions/{question_id}/votes` | Registra um voto |
 | `GET` | `/api/v1/questions/{question_id}/results` | Consulta resultados conforme a política de visibilidade |
@@ -198,7 +200,7 @@ export SIMPLETEST_BASE_URL='https://simple-voting.lndo.site'
 vendor/bin/phpunit --configuration=phpunit.drupal.xml.dist
 ```
 
-Não substitua `USUARIO`, `SENHA` e `NOME_DO_BANCO` por valores versionados em arquivos do projeto.
+A tooling `lando phpunit-drupal` executa a mesma configuração Kernel/Functional diretamente no appserver. Em ambos os casos, `SIMPLETEST_DB` e `SIMPLETEST_BASE_URL` precisam estar definidos no ambiente. Não substitua `USUARIO`, `SENHA` e `NOME_DO_BANCO` por valores versionados em arquivos do projeto.
 
 Os testes estão organizados em:
 
