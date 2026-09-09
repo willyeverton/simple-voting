@@ -17,6 +17,7 @@ services:
       - '@file.usage'
       - '@cache_tags.invalidator'
       - '@simple_voting.mutation_lock'
+      - '@logger.channel.simple_voting'
 
   simple_voting.vote_storage:
     class: Drupal\simple_voting\Service\VoteStorage
@@ -102,5 +103,6 @@ services:
     arguments:
       - '@database'
       - '@string_translation'
+      - '@simple_voting.mutation_lock'
     tags:
       - { name: event_subscriber }

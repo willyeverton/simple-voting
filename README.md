@@ -246,7 +246,7 @@ lando phpunit
 lando quality
 ```
 
-`lando quality` executa Composer validate, Composer audit, PHPCS, PHPStan e PHPUnit em sequência. Não use flags para ignorar auditorias, requisitos de plataforma ou falhas de segurança.
+`lando quality` executa Composer validate, Composer audit, PHPCS, PHPStan e PHPUnit Unit em sequência. O workflow remoto mantém essa mesma sequência. Kernel/Functional e concorrência dependem de um Drupal instalado e devem ser executados localmente com `lando phpunit-drupal` e banco real; não são executados no workflow remoto atual. Não use flags para ignorar auditorias, requisitos de plataforma ou falhas de segurança.
 
 ### Verificação completa do ambiente instalado
 
@@ -297,6 +297,7 @@ lando drush cr
 - [`docs/security-threat-model.md`](docs/security-threat-model.md): controles de segurança;
 - [`docs/error-catalog.md`](docs/error-catalog.md): códigos e respostas de erro;
 - [`docs/runbook.md`](docs/runbook.md): operação local;
+- [`docs/verification.md`](docs/verification.md): evidências fornecidas e critérios de verificação;
 - [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json): collection da API.
 
 ## Operação e limites conhecidos
