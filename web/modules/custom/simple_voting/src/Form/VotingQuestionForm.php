@@ -4,6 +4,7 @@ namespace Drupal\simple_voting\Form;
 
 use Drupal\Core\Entity\EntityForm;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\simple_voting\Entity\VotingQuestionInterface;
 use Drupal\simple_voting\Exception\InvalidOptionException;
@@ -20,6 +21,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 final class VotingQuestionForm extends EntityForm {
 
   public function __construct(
+    protected readonly EntityTypeManagerInterface $votingEntityTypeManager,
     protected readonly OptionStorage $optionStorage,
     protected readonly QuestionPersistenceService $questionPersistence,
   ) {}
@@ -29,6 +31,7 @@ final class VotingQuestionForm extends EntityForm {
    */
   public static function create(ContainerInterface $container): static {
     return new static(
+      $container->get('entity_type.manager'),
       $container->get('simple_voting.option_storage'),
       $container->get('simple_voting.question_persistence'),
     );
@@ -50,18 +53,17 @@ final class VotingQuestionForm extends EntityForm {
       '#maxlength' => 255,
     ];
 
-    if ($question->isNew()) {
-      $form['id'] = [
-        '#type' => 'machine_name',
-        '#title' => $this->t('Stable identifier'),
-        '#machine_name' => [
-          'exists' => [$this, 'exists'],
-          'source' => ['title'],
-        ],
-        '#maxlength' => 128,
-        '#required' => TRUE,
-      ];
-    }
+    $form['machine_name'] = [
+      '#type' => 'machine_name',
+      '#title' => $this->t('Machine name'),
+      '#default_value' => $question->getMachineName(),
+      '#required' => TRUE,
+      '#disabled' => !$question->isNew(),
+      '#machine_name' => [
+        'exists' => [$this, 'machineNameExists'],
+        'source' => ['title'],
+      ],
+    ];
 
     $this->initializeOptions($form_state);
     $count = (int) $form_state->get('options_count');
@@ -160,9 +162,6 @@ final class VotingQuestionForm extends EntityForm {
    */
   public function validateForm(array &$form, FormStateInterface $form_state): void {
     parent::validateForm($form, $form_state);
-    if ($this->entity->isNew() && !preg_match('/^[a-z0-9][a-z0-9_]{1,127}$/', (string) $form_state->getValue('id'))) {
-      $form_state->setErrorByName('id', $this->t('The identifier must use lowercase letters, numbers, and underscores only.'));
-    }
     $values = $form_state->getValue('options_wrapper') ?: [];
     $valid = 0;
     foreach ($values as $index => $option) {
@@ -180,10 +179,10 @@ final class VotingQuestionForm extends EntityForm {
 
     if (!$this->entity->isNew()) {
       try {
-        $this->optionStorage->assertCanSync($this->entity->id(), $this->submittedOptions($form_state));
+        $this->optionStorage->assertCanSync((int) $this->entity->id(), $this->submittedOptions($form_state));
       }
       catch (OptionInUseException) {
-        $form_state->setErrorByName('options_wrapper', $this->t('An option with votes cannot be removed. Close the question instead.'));
+        $form_state->setErrorByName('options_wrapper', $this->t('An option with votes cannot be removed.'));
       }
       catch (InvalidOptionException) {
         $form_state->setErrorByName('options_wrapper', $this->t('One of the submitted options is invalid.'));
@@ -198,12 +197,12 @@ final class VotingQuestionForm extends EntityForm {
     if (!$entity instanceof VotingQuestionInterface) {
       throw new \InvalidArgumentException('The form entity must be a voting question.');
     }
+    if ($entity->isNew()) {
+      $entity->set('machine_name', trim((string) $form_state->getValue('machine_name')));
+    }
     $entity->set('title', trim((string) $form_state->getValue('title')));
     $entity->set('show_results', (bool) $form_state->getValue('show_results'));
     $form_state->getValue('status') ? $entity->open() : $entity->close();
-    if ($entity->isNew()) {
-      $entity->set('id', $form_state->getValue('id'));
-    }
   }
 
   /**
@@ -220,7 +219,7 @@ final class VotingQuestionForm extends EntityForm {
       );
     }
     catch (OptionInUseException) {
-      $this->messenger()->addError($this->t('An option with votes cannot be removed. Close the question instead.'));
+      $this->messenger()->addError($this->t('An option with votes cannot be removed.'));
       $form_state->setRedirectUrl($question->toUrl($isNew ? 'collection' : 'edit-form'));
       return 0;
     }
@@ -245,6 +244,19 @@ final class VotingQuestionForm extends EntityForm {
       : $this->t('Question %label was updated.', ['%label' => $question->label()]));
     $form_state->setRedirectUrl($question->toUrl('collection'));
     return $status;
+  }
+
+  /**
+   * Checks whether a public machine name is already in use.
+   */
+  public function machineNameExists(string $value): bool {
+    return (bool) $this->votingEntityTypeManager
+      ->getStorage('voting_question')
+      ->getQuery()
+      ->accessCheck(FALSE)
+      ->condition('machine_name', $value)
+      ->range(0, 1)
+      ->execute();
   }
 
   /**
@@ -278,20 +290,13 @@ final class VotingQuestionForm extends EntityForm {
   }
 
   /**
-   * Machine name existence callback.
-   */
-  public function exists(string $id): bool {
-    return (bool) $this->entityTypeManager->getStorage('voting_question')->load($id);
-  }
-
-  /**
    * Initializes form state options once.
    */
   private function initializeOptions(FormStateInterface $form_state): void {
     if ($form_state->get('options_count') !== NULL) {
       return;
     }
-    $existing = $this->entity->isNew() ? [] : $this->optionStorage->getOptions($this->entity->id());
+    $existing = $this->entity->isNew() ? [] : $this->optionStorage->getOptions((int) $this->entity->id());
     $form_state->set('existing_options', array_values($existing));
     $form_state->set('options_count', max(1, count($existing)));
   }

@@ -4,11 +4,11 @@ namespace Drupal\simple_voting\Controller;
 
 use Drupal\Core\Cache\CacheableJsonResponse;
 use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Session\AccountProxyInterface;
 use Drupal\simple_voting\Service\QuestionReadService;
 use Drupal\simple_voting\Service\VotingApiSerializer;
+use Drupal\simple_voting\Service\VotingAvailabilityService;
 use Drupal\simple_voting\Service\VotingResultsService;
 use Drupal\simple_voting\Service\VotingVisibilityService;
 use Drupal\simple_voting\Service\VotingService;
@@ -28,7 +28,7 @@ final class VotingApiController extends ControllerBase {
 
   public function __construct(
     private readonly AccountProxyInterface $votingAccount,
-    private readonly ConfigFactoryInterface $votingConfigFactory,
+    private readonly VotingAvailabilityService $availability,
     private readonly QuestionReadService $questionRead,
     private readonly VotingApiSerializer $serializer,
     private readonly VotingResultsService $results,
@@ -42,7 +42,7 @@ final class VotingApiController extends ControllerBase {
   public static function create(ContainerInterface $container): static {
     return new static(
       $container->get('current_user'),
-      $container->get('config.factory'),
+      $container->get('simple_voting.availability'),
       $container->get('simple_voting.question_read'),
       $container->get('simple_voting.api_serializer'),
       $container->get('simple_voting.results'),
@@ -56,16 +56,14 @@ final class VotingApiController extends ControllerBase {
    */
   public function listQuestions(): CacheableJsonResponse {
     $this->requireAuthenticated();
-    $votingEnabled = (bool) $this->votingConfigFactory
-      ->get('simple_voting.settings')
-      ->get('voting_enabled');
-    $questions = $votingEnabled ? $this->questionRead->getQuestions(TRUE) : [];
+    $openOnly = !$this->votingAccount->hasPermission('administer simple voting');
+    $questions = $this->questionRead->getQuestions($openOnly);
     $data = array_map(fn ($question): array => $this->serializer->questionSummary($question), $questions);
     $cache = (new CacheableMetadata())
       ->addCacheTags([
         'config:simple_voting.settings',
         'simple_voting:question-list',
-        'config:voting_question_list',
+        'voting_question_list',
       ])
       ->addCacheContexts(['user.permissions'])
       ->setCacheMaxAge(0);
@@ -81,18 +79,18 @@ final class VotingApiController extends ControllerBase {
   public function getQuestion(string $question_id): CacheableJsonResponse {
     $this->requireAuthenticated();
     $question = $this->questionRead->load($question_id);
-    if ($question === NULL) {
+    if ($question === NULL || (!$question->isOpen() && !$this->votingAccount->hasPermission('administer simple voting'))) {
       throw new NotFoundHttpException();
     }
     $cache = (new CacheableMetadata())
       ->addCacheTags([
-        'config:simple_voting.question.' . $question_id,
-        'simple_voting:question:' . $question_id,
+        'voting_question:' . $question->id(),
+        'simple_voting:question:' . $question->id(),
       ])
       ->addCacheContexts(['user.permissions'])
       ->setCacheMaxAge(0);
     $response = (new CacheableJsonResponse([
-      'data' => $this->serializer->question($question, $this->questionRead->options($question_id)),
+      'data' => $this->serializer->question($question, $this->questionRead->options((int) $question->id())),
     ]))->addCacheableDependency($cache);
     $response->headers->set('Cache-Control', 'private, no-store');
     return $response;
@@ -136,7 +134,7 @@ final class VotingApiController extends ControllerBase {
       throw new AccessDeniedHttpException();
     }
 
-    $result = $this->results->getResults($question_id);
+    $result = $this->results->getResults((int) $question->id());
     $response = (new CacheableJsonResponse(['data' => $result['data']]))
       ->addCacheableDependency($result['cache'])
       ->addCacheableDependency((new CacheableMetadata())->setCacheMaxAge(0));
@@ -148,6 +146,7 @@ final class VotingApiController extends ControllerBase {
    * Requires a logged-in Drupal account at the business boundary.
    */
   private function requireAuthenticated(): void {
+    $this->availability->assertAvailable();
     if ($this->votingAccount->isAnonymous()) {
       throw new UnauthorizedHttpException(
         'Basic',

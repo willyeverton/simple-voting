@@ -2,6 +2,8 @@
 
 namespace Drupal\simple_voting\Form;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\TypedConfigManagerInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\simple_voting\Exception\VoteLockUnavailableException;
@@ -13,13 +15,23 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  */
 final class VotingSettingsForm extends ConfigFormBase {
 
-  public function __construct(protected readonly VotingMutationLock $mutationLock) {}
+  public function __construct(
+    ConfigFactoryInterface $configFactory,
+    TypedConfigManagerInterface $typedConfigManager,
+    protected readonly VotingMutationLock $mutationLock,
+  ) {
+    parent::__construct($configFactory, $typedConfigManager);
+  }
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container): static {
-    return new static($container->get('simple_voting.mutation_lock'));
+    return new static(
+      $container->get('config.factory'),
+      $container->get('config.typed'),
+      $container->get('simple_voting.mutation_lock'),
+    );
   }
 
   /**
@@ -44,7 +56,7 @@ final class VotingSettingsForm extends ConfigFormBase {
     $form['voting_enabled'] = [
       '#type' => 'checkbox',
       '#title' => $this->t('Enable voting'),
-      '#description' => $this->t('When disabled, CMS and API vote submissions are blocked. Existing authorized results remain readable.'),
+      '#description' => $this->t('When disabled, the complete CMS and API voting flow is unavailable, including results.'),
       '#default_value' => (bool) $config->get('voting_enabled'),
     ];
     return parent::buildForm($form, $form_state);

@@ -2,12 +2,13 @@
 
 namespace Drupal\simple_voting\Entity;
 
-use Drupal\Core\Config\Entity\ConfigEntityInterface;
+use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityChangedInterface;
 
 /**
  * Provides an interface for voting questions.
  */
-interface VotingQuestionInterface extends ConfigEntityInterface {
+interface VotingQuestionInterface extends ContentEntityInterface, EntityChangedInterface {
 
   /**
    * Determines whether the question accepts votes.
@@ -30,13 +31,13 @@ interface VotingQuestionInterface extends ConfigEntityInterface {
   public function showsResults(): bool;
 
   /**
+   * Returns the stable public machine name.
+   */
+  public function getMachineName(): string;
+
+  /**
    * Returns the creation timestamp.
    */
   public function getCreatedTime(): int;
-
-  /**
-   * Returns the changed timestamp.
-   */
-  public function getChangedTime(): int;
 
 }

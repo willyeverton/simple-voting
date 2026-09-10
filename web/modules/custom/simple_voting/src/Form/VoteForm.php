@@ -12,6 +12,7 @@ use Drupal\simple_voting\Exception\DuplicateVoteException;
 use Drupal\simple_voting\Exception\InvalidOptionException;
 use Drupal\simple_voting\Exception\PersistenceFailureException;
 use Drupal\simple_voting\Exception\QuestionClosedException;
+use Drupal\simple_voting\Exception\QuestionNotFoundException;
 use Drupal\simple_voting\Exception\VoteLockUnavailableException;
 use Drupal\simple_voting\Exception\VotingDisabledException;
 use Drupal\simple_voting\Service\QuestionReadService;
@@ -74,7 +75,7 @@ final class VoteForm extends FormBase {
       return $form;
     }
 
-    $options = $this->questionRead->options($question_id);
+    $options = $this->questionRead->options((int) $question->id());
     if (!$options) {
       $form['notice'] = [
         '#plain_text' => $this->t('This question has no answer options.'),
@@ -166,8 +167,8 @@ final class VoteForm extends FormBase {
     $form['#cache'] = [
       'tags' => [
         'config:simple_voting.settings',
-        'config:simple_voting.question.' . $question_id,
-        'simple_voting:question:' . $question_id,
+        'voting_question:' . $question->id(),
+        'simple_voting:question:' . $question->id(),
       ],
       'contexts' => ['user', 'user.permissions'],
     ];
@@ -204,6 +205,11 @@ final class VoteForm extends FormBase {
       $this->messenger()->addWarning($this->t('This question is not accepting votes.'));
       return;
     }
+    catch (QuestionNotFoundException) {
+      $this->messenger()->addError($this->t('This question is no longer available.'));
+      $form_state->setRedirect('simple_voting.questions');
+      return;
+    }
     catch (InvalidOptionException) {
       $this->messenger()->addError($this->t('The selected option is no longer available. Please reload the question.'));
       return;
@@ -214,10 +220,13 @@ final class VoteForm extends FormBase {
     }
 
     $question = $this->questionRead->requireQuestion($questionId);
-    $form_state->setRedirect(
-      $question->showsResults() ? 'simple_voting.results' : 'simple_voting.vote',
-      ['question_id' => $questionId],
-    );
+    if ($question->showsResults()) {
+      $form_state->setRedirect('simple_voting.results', ['question_id' => $questionId]);
+    }
+    else {
+      $this->messenger()->addStatus($this->t('Your vote was recorded.'));
+      $form_state->setRedirect('simple_voting.questions');
+    }
   }
 
 }

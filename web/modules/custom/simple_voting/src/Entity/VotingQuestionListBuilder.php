@@ -2,7 +2,7 @@
 
 namespace Drupal\simple_voting\Entity;
 
-use Drupal\Core\Config\Entity\ConfigEntityListBuilder;
+use Drupal\Core\Entity\EntityListBuilder;
 use Drupal\Core\Datetime\DateFormatterInterface;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
@@ -13,7 +13,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Builds the administrative voting question listing.
  */
-final class VotingQuestionListBuilder extends ConfigEntityListBuilder {
+final class VotingQuestionListBuilder extends EntityListBuilder {
 
   public function __construct(
     EntityTypeInterface $entity_type,
@@ -40,7 +40,7 @@ final class VotingQuestionListBuilder extends ConfigEntityListBuilder {
   public function buildHeader(): array {
     return [
       'title' => $this->t('Title'),
-      'id' => $this->t('Identifier'),
+      'id' => $this->t('Internal ID'),
       'status' => $this->t('Status'),
       'show_results' => $this->t('Results'),
       'changed' => $this->t('Changed'),

@@ -4,6 +4,8 @@ namespace Drupal\simple_voting\EventSubscriber;
 
 use Drupal\Core\Config\ConfigEvents;
 use Drupal\Core\Config\ConfigImporterEvent;
+use Drupal\Core\Config\ConfigImporterException;
+use Drupal\Core\Config\Importer\MissingContentEvent;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslationInterface;
@@ -38,7 +40,11 @@ final class VotingConfigImportSubscriber implements EventSubscriberInterface {
    */
   public static function getSubscribedEvents(): array {
     return [
-      ConfigEvents::IMPORT_VALIDATE => ['onConfigImporterValidate', 100],
+      ConfigEvents::IMPORT_VALIDATE => [
+        ['onConfigImporterValidate', 100],
+        ['onConfigImporterValidateComplete', -1000],
+      ],
+      ConfigEvents::IMPORT_MISSING_CONTENT => ['onConfigImporterMissingContent', -100],
       ConfigEvents::IMPORT => ['onConfigImporterImport', -100],
     ];
   }
@@ -87,6 +93,34 @@ final class VotingConfigImportSubscriber implements EventSubscriberInterface {
     catch (\Throwable $exception) {
       $this->releaseImportLock();
       throw $exception;
+    }
+  }
+
+  /**
+   * Releases the gate when any validation listener rejected the import.
+   */
+  public function onConfigImporterValidateComplete(ConfigImporterEvent $event): void {
+    if ($this->importLockAcquired && $event->getConfigImporter()->getErrors()) {
+      $this->releaseImportLock();
+    }
+  }
+
+  /**
+   * Renews the gate during a long-running import step.
+   */
+  public function onConfigImporterMissingContent(MissingContentEvent $event): void {
+    if (!$this->importLockAcquired) {
+      return;
+    }
+
+    try {
+      $this->mutationLock->renewGlobal();
+    }
+    catch (VoteLockUnavailableException) {
+      $this->releaseImportLock();
+      throw new ConfigImporterException(
+        'Simple Voting mutation protection expired during configuration import. Retry the import.',
+      );
     }
   }
 

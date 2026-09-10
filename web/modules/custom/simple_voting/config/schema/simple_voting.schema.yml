@@ -6,9 +6,11 @@ simple_voting.settings:
       type: boolean
       label: 'Voting enabled'
 
+# Retained while legacy question configuration remains available for migration
+# verification and rollback.
 simple_voting.question.*:
   type: config_entity
-  label: 'Voting question'
+  label: 'Legacy voting question'
   mapping:
     id:
       type: string

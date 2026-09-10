@@ -16,14 +16,14 @@ final class VotingResultsAccessCheck implements AccessInterface {
    */
   public function access(AccountInterface $account): AccessResult {
     if ($account->isAnonymous()) {
-      return AccessResult::forbidden()->addCacheContexts(['user.permissions']);
+      return AccessResult::forbidden()->addCacheContexts(['user', 'user.permissions']);
     }
 
     $allowed = $account->hasPermission('vote in polls')
       || $account->hasPermission('view voting results');
 
     return AccessResult::allowedIf($allowed)
-      ->addCacheContexts(['user.permissions']);
+      ->addCacheContexts(['user', 'user.permissions']);
   }
 
 }

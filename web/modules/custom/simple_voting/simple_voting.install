@@ -9,48 +9,6 @@
  * Implements hook_schema().
  */
 function simple_voting_schema(): array {
-  $schema['simple_voting_option'] = [
-    'description' => 'Options belonging to a Simple Voting question.',
-    'fields' => [
-      'id' => [
-        'type' => 'serial',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-      ],
-      'question_id' => [
-        'type' => 'varchar',
-        'length' => 128,
-        'charset' => 'ascii',
-        'not null' => TRUE,
-      ],
-      'title' => [
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-      ],
-      'description' => [
-        'type' => 'text',
-        'size' => 'medium',
-        'not null' => FALSE,
-      ],
-      'image_fid' => [
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => FALSE,
-      ],
-      'weight' => [
-        'type' => 'int',
-        'not null' => TRUE,
-        'default' => 0,
-      ],
-    ],
-    'primary key' => ['id'],
-    'indexes' => [
-      'question_weight' => ['question_id', 'weight'],
-      'question_id' => ['question_id'],
-    ],
-  ];
-
   $schema['simple_voting_vote'] = [
     'description' => 'Immutable user votes for Simple Voting questions.',
     'fields' => [
@@ -60,9 +18,8 @@ function simple_voting_schema(): array {
         'not null' => TRUE,
       ],
       'question_id' => [
-        'type' => 'varchar',
-        'length' => 128,
-        'charset' => 'ascii',
+        'type' => 'int',
+        'unsigned' => TRUE,
         'not null' => TRUE,
       ],
       'option_id' => [
@@ -99,30 +56,25 @@ function simple_voting_schema(): array {
  * Implements hook_install().
  */
 function simple_voting_install(): void {
-  simple_voting_set_default_theme();
+  simple_voting_install_theme();
   simple_voting_ensure_theme_blocks();
 }
 
 /**
- * Sets the frontend default theme.
- *
- * The administrative theme is not changed.
+ * Installs the optional frontend theme without changing the active theme.
  */
-function simple_voting_set_default_theme(): void {
+function simple_voting_install_theme(): void {
   $theme_handler = \Drupal::service('theme_handler');
   if (!$theme_handler->themeExists('simple_voting_theme')) {
     \Drupal::service('theme_installer')->install(['simple_voting_theme']);
   }
+}
 
-  $theme_config = \Drupal::configFactory()->getEditable('system.theme');
-  $current_default = (string) $theme_config->get('default');
-  if ($current_default !== 'simple_voting_theme') {
-    $state = \Drupal::state();
-    if ($state->get('simple_voting.previous_default_theme') === NULL) {
-      $state->set('simple_voting.previous_default_theme', $current_default);
-    }
-    $theme_config->set('default', 'simple_voting_theme')->save();
-  }
+/**
+ * Keeps stale discovery data from invoking the former theme setup function.
+ */
+function simple_voting_set_default_theme(): void {
+  simple_voting_install_theme();
 }
 
 /**
@@ -145,7 +97,7 @@ function simple_voting_restore_previous_theme(): void {
 }
 
 /**
- * Ensures the global theme's default blocks exist.
+ * Ensures the optional theme's default blocks exist.
  */
 function simple_voting_ensure_theme_blocks(): void {
   $storage = \Drupal::entityTypeManager()->getStorage('block');
@@ -243,26 +195,225 @@ function simple_voting_update_11003(): void {
 }
 
 /**
- * Installs the global Simple Voting frontend theme for existing sites.
+ * Installs the optional Simple Voting frontend theme for existing sites.
  */
 function simple_voting_update_11004(): void {
-  simple_voting_set_default_theme();
+  simple_voting_install_theme();
 }
 
 /**
- * Installs missing default blocks for the global frontend theme.
+ * Installs missing blocks for the optional frontend theme.
  */
 function simple_voting_update_11005(): void {
-  simple_voting_set_default_theme();
+  simple_voting_install_theme();
   simple_voting_ensure_theme_blocks();
 }
 
 /**
- * Reconciles the global frontend theme blocks after configuration restoration.
+ * Reconciles optional frontend theme blocks after configuration restoration.
  */
 function simple_voting_update_11006(): void {
-  simple_voting_set_default_theme();
+  simple_voting_install_theme();
   simple_voting_ensure_theme_blocks();
+}
+
+/**
+ * Migrates questions and options to content entities with internal IDs.
+ */
+function simple_voting_update_11007(): void {
+  $database = \Drupal::database();
+  $schema = $database->schema();
+  $entityTypeManager = \Drupal::entityTypeManager();
+  $updateManager = \Drupal::entityDefinitionUpdateManager();
+  $installedRepository = \Drupal::service('entity.last_installed_schema.repository');
+  $state = \Drupal::state();
+  if ($state->get('simple_voting.update_11007.completed', FALSE)) {
+    return;
+  }
+
+  $configNames = \Drupal::configFactory()->listAll('simple_voting.question.');
+  $legacyQuestions = [];
+  foreach ($configNames as $configName) {
+    $data = \Drupal::config($configName)->getRawData();
+    $legacyId = (string) ($data['id'] ?? substr($configName, strlen('simple_voting.question.')));
+    if ($legacyId === '') {
+      throw new \RuntimeException(sprintf('Legacy voting question %s has no identifier.', $configName));
+    }
+    $legacyQuestions[$legacyId] = $data;
+  }
+
+  if (!$schema->tableExists('voting_question')) {
+    $installedDefinition = $installedRepository->getLastInstalledDefinition('voting_question');
+    if ($installedDefinition !== NULL) {
+      $updateManager->uninstallEntityType($installedDefinition);
+    }
+    $updateManager->installEntityType($entityTypeManager->getDefinition('voting_question'));
+  }
+  if (!$schema->tableExists('voting_option')) {
+    $updateManager->installEntityType($entityTypeManager->getDefinition('voting_option'));
+  }
+
+  $questionStorage = $entityTypeManager->getStorage('voting_question');
+  $optionStorage = $entityTypeManager->getStorage('voting_option');
+  $questionMap = $state->get('simple_voting.update_11007.question_map', []);
+  foreach ($legacyQuestions as $legacyId => $data) {
+    if (isset($questionMap[$legacyId]) && $questionStorage->load($questionMap[$legacyId])) {
+      continue;
+    }
+    $question = $questionStorage->create([
+      'uuid' => $data['uuid'] ?? NULL,
+      'machine_name' => $legacyId,
+      'title' => (string) ($data['title'] ?? $legacyId),
+      'status' => (bool) ($data['status'] ?? FALSE),
+      'show_results' => (bool) ($data['show_results'] ?? FALSE),
+      'created' => (int) ($data['created'] ?? 0),
+      'changed' => (int) ($data['changed'] ?? 0),
+    ]);
+    $question->save();
+    $questionMap[$legacyId] = (int) $question->id();
+    $state->set('simple_voting.update_11007.question_map', $questionMap);
+  }
+
+  if ($schema->tableExists('simple_voting_option')) {
+    $query = $database->select('simple_voting_option', 'legacy')
+      ->fields('legacy', ['question_id'])
+      ->range(0, 1);
+    if ($questionMap) {
+      $query->condition('question_id', array_keys($questionMap), 'NOT IN');
+    }
+    $orphan = $query->execute()->fetchField();
+    if ($orphan !== FALSE) {
+      throw new \RuntimeException(sprintf('Legacy options reference unknown question %s.', $orphan));
+    }
+  }
+
+  if ($schema->tableExists('simple_voting_option')) {
+    $legacyOptions = $database->select('simple_voting_option', 'legacy')
+      ->fields('legacy')
+      ->orderBy('id')
+      ->execute();
+    foreach ($legacyOptions as $legacyOption) {
+      if ($optionStorage->load((int) $legacyOption->id)) {
+        continue;
+      }
+      $option = $optionStorage->create([
+        'id' => (int) $legacyOption->id,
+        'question_id' => $questionMap[$legacyOption->question_id],
+        'title' => (string) $legacyOption->title,
+        'description' => (string) ($legacyOption->description ?? ''),
+        'image_fid' => $legacyOption->image_fid !== NULL ? (int) $legacyOption->image_fid : NULL,
+        'weight' => (int) $legacyOption->weight,
+      ]);
+      $option->save();
+    }
+  }
+
+  if ($schema->tableExists('simple_voting_vote')) {
+    $invalidVoteQuery = $database->select('simple_voting_vote', 'vote');
+    $invalidVoteQuery->leftJoin('voting_option', 'option', '[option].[id] = [vote].[option_id]');
+    $invalidVote = $invalidVoteQuery
+      ->fields('vote', ['id'])
+      ->isNull('option.id')
+      ->range(0, 1)
+      ->execute()
+      ->fetchField();
+    if ($invalidVote !== FALSE) {
+      throw new \RuntimeException(sprintf('Vote %s references an option that was not migrated.', $invalidVote));
+    }
+
+    $sampleQuestionId = $database->select('simple_voting_vote', 'vote')
+      ->fields('vote', ['question_id'])
+      ->range(0, 1)
+      ->execute()
+      ->fetchField();
+    $usesLegacyIds = $sampleQuestionId !== FALSE
+      && array_key_exists((string) $sampleQuestionId, $questionMap);
+    $usesInternalIds = $sampleQuestionId !== FALSE
+      && in_array((int) $sampleQuestionId, array_values($questionMap), TRUE);
+    if ($sampleQuestionId !== FALSE && !$usesLegacyIds && !$usesInternalIds) {
+      throw new \RuntimeException(sprintf('Vote references unknown question %s.', $sampleQuestionId));
+    }
+
+    if ($sampleQuestionId === FALSE || $usesLegacyIds) {
+      if (!$schema->fieldExists('simple_voting_vote', 'question_entity_id')) {
+        $schema->addField('simple_voting_vote', 'question_entity_id', [
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => FALSE,
+        ]);
+      }
+      if ($usesLegacyIds) {
+        foreach ($questionMap as $legacyId => $internalId) {
+          $database->update('simple_voting_vote')
+            ->fields(['question_entity_id' => $internalId])
+            ->condition('question_id', $legacyId)
+            ->execute();
+        }
+      }
+      $unmapped = $database->select('simple_voting_vote', 'vote')
+        ->fields('vote', ['id'])
+        ->isNull('question_entity_id')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+      if ($unmapped !== FALSE) {
+        throw new \RuntimeException('At least one vote could not be mapped to an internal question ID.');
+      }
+
+      $schema->dropUniqueKey('simple_voting_vote', 'question_uid');
+      $schema->dropIndex('simple_voting_vote', 'question_option');
+      $schema->dropIndex('simple_voting_vote', 'question_id');
+      $database->update('simple_voting_vote')
+        ->expression('question_id', 'question_entity_id')
+        ->execute();
+      $schema->changeField('simple_voting_vote', 'question_id', 'question_id', [
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ]);
+      $schema->addUniqueKey('simple_voting_vote', 'question_uid', ['question_id', 'uid']);
+      $schema->addIndex('simple_voting_vote', 'question_option', ['question_id', 'option_id'], []);
+      $schema->addIndex('simple_voting_vote', 'question_id', ['question_id'], []);
+    }
+    if ($schema->fieldExists('simple_voting_vote', 'question_entity_id')) {
+      $schema->dropField('simple_voting_vote', 'question_entity_id');
+    }
+  }
+
+  // Legacy configuration, the option table, and the migration map are retained
+  // until operators validate the migrated entities and vote references.
+  $state->set('simple_voting.update_11007.completed', TRUE);
+}
+
+/**
+ * Removes the legacy `published_once` base field.
+ */
+function simple_voting_update_11008(): void {
+  $schema = \Drupal::database()->schema();
+  if ($schema->fieldExists('voting_question', 'published_once')) {
+    $schema->dropField('voting_question', 'published_once');
+  }
+
+  $installedRepository = \Drupal::service('entity.last_installed_schema.repository');
+  $fieldDefinitions = $installedRepository->getLastInstalledFieldStorageDefinitions('voting_question');
+  if (isset($fieldDefinitions['published_once'])) {
+    $installedRepository->deleteLastInstalledFieldStorageDefinition($fieldDefinitions['published_once']);
+  }
+}
+
+/**
+ * Cleans up stale `published_once` field storage definition.
+ */
+function simple_voting_update_11009(): void {
+  $installedRepository = \Drupal::service('entity.last_installed_schema.repository');
+  $fieldDefinitions = $installedRepository->getLastInstalledFieldStorageDefinitions('voting_question');
+  if (isset($fieldDefinitions['published_once'])) {
+    $schema = \Drupal::database()->schema();
+    if ($schema->fieldExists('voting_question', 'published_once')) {
+      $schema->dropField('voting_question', 'published_once');
+    }
+    $installedRepository->deleteLastInstalledFieldStorageDefinition($fieldDefinitions['published_once']);
+  }
 }
 
 /**
@@ -271,6 +422,8 @@ function simple_voting_update_11006(): void {
 function simple_voting_uninstall(): void {
   simple_voting_restore_previous_theme();
   \Drupal::state()->delete('simple_voting.allow_destructive_uninstall');
+  \Drupal::state()->delete('simple_voting.update_11007.completed');
+  \Drupal::state()->delete('simple_voting.update_11007.question_map');
 
   $database = \Drupal::database();
   foreach (['simple_voting_vote', 'simple_voting_option'] as $table) {

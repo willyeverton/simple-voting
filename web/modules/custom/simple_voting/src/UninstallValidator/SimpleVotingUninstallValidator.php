@@ -42,7 +42,7 @@ final class SimpleVotingUninstallValidator implements ModuleUninstallValidatorIn
    * Determines whether runtime options or votes exist.
    */
   private function hasRuntimeData(): bool {
-    foreach (['simple_voting_option', 'simple_voting_vote'] as $table) {
+    foreach (['voting_question', 'voting_option', 'simple_voting_option', 'simple_voting_vote'] as $table) {
       if ($this->database->schema()->tableExists($table)
         && $this->database->select($table, 'data')
           ->fields('data', ['id'])

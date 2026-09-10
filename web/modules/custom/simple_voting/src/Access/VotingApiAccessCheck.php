@@ -27,7 +27,7 @@ final class VotingApiAccessCheck implements AccessInterface {
     }
 
     return AccessResult::allowedIfHasPermission($account, 'access simple voting API')
-      ->addCacheContexts(['user.permissions']);
+      ->addCacheContexts(['user', 'user.permissions']);
   }
 
 }

@@ -2,7 +2,10 @@
 
 namespace Drupal\simple_voting\Form;
 
-use Drupal\Core\Entity\EntityConfirmFormBase;
+use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Core\Entity\ContentEntityConfirmFormBase;
+use Drupal\Core\Entity\EntityRepositoryInterface;
+use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\simple_voting\Exception\QuestionHasVotesException;
@@ -14,15 +17,27 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 /**
  * Confirms safe deletion of a voting question.
  */
-final class VotingQuestionDeleteForm extends EntityConfirmFormBase {
+final class VotingQuestionDeleteForm extends ContentEntityConfirmFormBase {
 
-  public function __construct(protected readonly QuestionDeletionService $deletionService) {}
+  public function __construct(
+    EntityRepositoryInterface $entityRepository,
+    EntityTypeBundleInfoInterface $entityTypeBundleInfo,
+    TimeInterface $time,
+    protected readonly QuestionDeletionService $deletionService,
+  ) {
+    parent::__construct($entityRepository, $entityTypeBundleInfo, $time);
+  }
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container): static {
-    return new static($container->get('simple_voting.question_deletion'));
+    return new static(
+      $container->get('entity.repository'),
+      $container->get('entity_type.bundle.info'),
+      $container->get('datetime.time'),
+      $container->get('simple_voting.question_deletion'),
+    );
   }
 
   /**

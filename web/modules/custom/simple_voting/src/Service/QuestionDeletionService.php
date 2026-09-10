@@ -28,12 +28,12 @@ final class QuestionDeletionService {
    * Deletes a question only when it has no transactional votes.
    */
   public function delete(VotingQuestionInterface $question): void {
-    $questionId = (string) $question->id();
+    $questionId = (int) $question->id();
     $globalLockAcquired = FALSE;
     try {
       $this->mutationLock->acquireGlobal();
       $globalLockAcquired = TRUE;
-      $this->mutationLock->acquire($questionId);
+      $this->mutationLock->acquire((string) $questionId);
     }
     catch (VoteLockUnavailableException $exception) {
       $this->logger->warning('Question mutation lock unavailable.', [
@@ -64,6 +64,12 @@ final class QuestionDeletionService {
       }
       throw $exception;
     }
+    catch (VoteLockUnavailableException $exception) {
+      if ($transaction !== NULL) {
+        $transaction->rollBack();
+      }
+      throw $exception;
+    }
     catch (\Throwable $exception) {
       if ($transaction !== NULL) {
         $transaction->rollBack();
@@ -77,7 +83,7 @@ final class QuestionDeletionService {
     }
     finally {
       try {
-        $this->mutationLock->release($questionId);
+        $this->mutationLock->release((string) $questionId);
       }
       finally {
         $this->mutationLock->releaseGlobal();
@@ -85,10 +91,10 @@ final class QuestionDeletionService {
     }
 
     $this->cacheTagsInvalidator->invalidateTags([
-      'config:simple_voting.question.' . $questionId,
+      'voting_question:' . $questionId,
       'simple_voting:question:' . $questionId,
       'simple_voting:question-list',
-      'config:voting_question_list',
+      'voting_question_list',
     ]);
   }
 

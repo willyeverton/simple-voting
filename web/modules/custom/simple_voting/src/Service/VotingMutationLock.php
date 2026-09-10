@@ -18,7 +18,7 @@ final class VotingMutationLock {
   /**
    * The lifetime of the lock while the mutation is in progress.
    */
-  private const LOCK_LIFETIME = 30.0;
+  private const LOCK_LIFETIME = 300.0;
 
   /**
    * The maximum wait between acquisition attempts in seconds.
@@ -53,6 +53,16 @@ final class VotingMutationLock {
   }
 
   /**
+   * Renews the global mutation gate while a long operation is active.
+   *
+   * @throws \Drupal\simple_voting\Exception\VoteLockUnavailableException
+   *   When the lock is no longer owned by this request.
+   */
+  public function renewGlobal(): void {
+    $this->renewKey(self::IMPORT_LOCK_KEY);
+  }
+
+  /**
    * Acquires the mutation lock for a question.
    *
    * @throws \Drupal\simple_voting\Exception\VoteLockUnavailableException
@@ -70,6 +80,16 @@ final class VotingMutationLock {
   }
 
   /**
+   * Renews a question mutation lock while a long operation is active.
+   *
+   * @throws \Drupal\simple_voting\Exception\VoteLockUnavailableException
+   *   When the lock is no longer owned by this request.
+   */
+  public function renew(string $questionId): void {
+    $this->renewKey($this->getKey($questionId));
+  }
+
+  /**
    * Acquires a deterministic lock key with the shared retry policy.
    */
   private function acquireKey(string $lockKey): void {
@@ -84,6 +104,15 @@ final class VotingMutationLock {
     }
 
     throw new VoteLockUnavailableException();
+  }
+
+  /**
+   * Extends an already-owned lock lease.
+   */
+  private function renewKey(string $lockKey): void {
+    if (!$this->lock->acquire($lockKey, self::LOCK_LIFETIME)) {
+      throw new VoteLockUnavailableException();
+    }
   }
 
   /**

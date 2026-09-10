@@ -38,15 +38,19 @@ services:
       - '@cache_tags.invalidator'
       - '@logger.channel.simple_voting'
 
+  simple_voting.availability:
+    class: Drupal\simple_voting\Service\VotingAvailabilityService
+    arguments:
+      - '@config.factory'
+
   simple_voting.voting:
     class: Drupal\simple_voting\Service\VotingService
     arguments:
-      - '@config.factory'
+      - '@simple_voting.availability'
       - '@database'
       - '@simple_voting.question_read'
       - '@simple_voting.option_storage'
       - '@simple_voting.vote_storage'
-      - '@simple_voting.mutation_lock'
       - '@datetime.time'
       - '@cache_tags.invalidator'
       - '@logger.channel.simple_voting'
@@ -59,6 +63,8 @@ services:
 
   simple_voting.visibility:
     class: Drupal\simple_voting\Service\VotingVisibilityService
+    arguments:
+      - '@simple_voting.vote_storage'
 
   simple_voting.question_deletion:
     class: Drupal\simple_voting\Service\QuestionDeletionService
@@ -95,14 +101,5 @@ services:
     class: Drupal\simple_voting\EventSubscriber\VotingApiExceptionSubscriber
     arguments:
       - '@logger.channel.simple_voting'
-    tags:
-      - { name: event_subscriber }
-
-  simple_voting.config_import_subscriber:
-    class: Drupal\simple_voting\EventSubscriber\VotingConfigImportSubscriber
-    arguments:
-      - '@database'
-      - '@string_translation'
-      - '@simple_voting.mutation_lock'
     tags:
       - { name: event_subscriber }

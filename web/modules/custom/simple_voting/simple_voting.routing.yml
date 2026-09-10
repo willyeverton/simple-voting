@@ -23,7 +23,7 @@ simple_voting.vote:
   requirements:
     _permission: 'vote in polls'
     _user_is_logged_in: 'TRUE'
-    question_id: '[a-z0-9][a-z0-9_]{1,127}'
+    question_id: '[a-z0-9_]+'
 
 simple_voting.results:
   path: '/voting/{question_id}/results'
@@ -32,7 +32,7 @@ simple_voting.results:
     _title_callback: '\Drupal\simple_voting\Controller\VotingResultsController::title'
   requirements:
     _custom_access: 'simple_voting.results_access:access'
-    question_id: '[a-z0-9][a-z0-9_]{1,127}'
+    question_id: '[a-z0-9_]+'
 
 simple_voting.api.questions:
   path: '/api/v1/questions'
@@ -57,7 +57,7 @@ simple_voting.api.question:
     _simple_voting_api: true
   requirements:
     _custom_access: 'simple_voting.api_access:access'
-    question_id: '[a-z0-9][a-z0-9_]{1,127}'
+    question_id: '[a-z0-9_]+'
 
 simple_voting.api.vote:
   path: '/api/v1/questions/{question_id}/votes'
@@ -71,7 +71,7 @@ simple_voting.api.vote:
     _simple_voting_api: true
   requirements:
     _custom_access: 'simple_voting.api_access:access'
-    question_id: '[a-z0-9][a-z0-9_]{1,127}'
+    question_id: '[a-z0-9_]+'
 
 simple_voting.api.results:
   path: '/api/v1/questions/{question_id}/results'
@@ -84,4 +84,4 @@ simple_voting.api.results:
     _simple_voting_api: true
   requirements:
     _custom_access: 'simple_voting.api_access:access'
-    question_id: '[a-z0-9][a-z0-9_]{1,127}'
+    question_id: '[a-z0-9_]+'

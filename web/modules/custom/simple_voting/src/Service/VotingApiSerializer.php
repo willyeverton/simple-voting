@@ -21,7 +21,7 @@ final class VotingApiSerializer {
    */
   public function questionSummary(VotingQuestionInterface $question): array {
     return [
-      'id' => $question->id(),
+      'id' => $question->getMachineName(),
       'title' => (string) $question->label(),
       'status' => $question->isOpen() ? 'open' : 'closed',
       'show_results' => $question->showsResults(),

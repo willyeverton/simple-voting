@@ -8,6 +8,7 @@ use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\file\FileInterface;
 use Drupal\file\FileUsage\FileUsageInterface;
+use Drupal\simple_voting\Entity\VotingOptionInterface;
 use Drupal\simple_voting\Exception\InvalidOptionException;
 use Drupal\simple_voting\Exception\OptionInUseException;
 use Psr\Log\LoggerInterface;
@@ -46,8 +47,8 @@ class OptionStorage {
   /**
    * Returns options ordered by weight and ID.
    */
-  public function getOptions(string $questionId): array {
-    return $this->database->select('simple_voting_option', 'o')
+  public function getOptions(int $questionId): array {
+    return $this->database->select('voting_option', 'o')
       ->fields('o', ['id', 'question_id', 'title', 'description', 'image_fid', 'weight'])
       ->condition('question_id', $questionId)
       ->orderBy('weight')
@@ -59,8 +60,8 @@ class OptionStorage {
   /**
    * Returns one option when it belongs to the requested question.
    */
-  public function getOption(string $questionId, int $optionId): ?array {
-    $option = $this->database->select('simple_voting_option', 'o')
+  public function getOption(int $questionId, int $optionId): ?array {
+    $option = $this->database->select('voting_option', 'o')
       ->fields('o', ['id', 'question_id', 'title', 'description', 'image_fid', 'weight'])
       ->condition('id', $optionId)
       ->condition('question_id', $questionId)
@@ -74,31 +75,34 @@ class OptionStorage {
   /**
    * Validates that submitted option IDs can be synchronized safely.
    *
-   * @param string $questionId
-   *   The question machine name.
+   * @param int $questionId
+   *   The internal question ID.
    * @param array<int, array<string, mixed>> $submitted
    *   Option values with optional id keys.
    */
-  public function assertCanSync(string $questionId, array $submitted): void {
+  public function assertCanSync(int $questionId, array $submitted): void {
     $existing = $this->getOptions($questionId);
     $existingById = [];
     foreach ($existing as $option) {
       $existingById[(int) $option['id']] = $option;
     }
 
-    $submittedIds = [];
+    $submittedById = [];
     foreach ($submitted as $option) {
       if (!empty($option['id'])) {
         $id = (int) $option['id'];
-        if (!isset($existingById[$id]) || in_array($id, $submittedIds, TRUE)) {
+        if (!isset($existingById[$id]) || isset($submittedById[$id])) {
           throw new InvalidOptionException();
         }
-        $submittedIds[] = $id;
+        $submittedById[$id] = $option;
       }
     }
 
     foreach ($existingById as $id => $option) {
-      if (!in_array($id, $submittedIds, TRUE) && $this->hasVotesForOption($id)) {
+      if (isset($submittedById[$id])) {
+        continue;
+      }
+      if ($this->hasVotesForOption($id)) {
         throw new OptionInUseException();
       }
     }
@@ -107,8 +111,8 @@ class OptionStorage {
   /**
    * Synchronizes submitted options for a question.
    *
-   * @param string $questionId
-   *   The question machine name.
+   * @param int $questionId
+   *   The internal question ID.
    * @param array<int, array<string, mixed>> $submitted
    *   Option values with optional id and image_fid keys.
    * @param bool $lockHeld
@@ -118,7 +122,7 @@ class OptionStorage {
    * @param bool $globalLockHeld
    *   Whether the caller already owns the global mutation gate.
    */
-  public function sync(string $questionId, array $submitted, bool $lockHeld = FALSE, bool $invalidate = TRUE, bool $globalLockHeld = FALSE): void {
+  public function sync(int $questionId, array $submitted, bool $lockHeld = FALSE, bool $invalidate = TRUE, bool $globalLockHeld = FALSE): void {
     $globalLockAcquired = FALSE;
     $questionLockAcquired = FALSE;
 
@@ -128,7 +132,7 @@ class OptionStorage {
         $globalLockAcquired = TRUE;
       }
       if (!$lockHeld) {
-        $this->mutationLock->acquire($questionId);
+        $this->mutationLock->acquire((string) $questionId);
         $questionLockAcquired = TRUE;
       }
       $normalized = [];
@@ -151,6 +155,7 @@ class OptionStorage {
         throw new InvalidOptionException();
       }
 
+      $this->renewLocks($questionId);
       $existing = $this->getOptions($questionId);
       $existingById = [];
       foreach ($existing as $option) {
@@ -167,8 +172,15 @@ class OptionStorage {
       if (count($submittedIds) !== count(array_unique($submittedIds))) {
         throw new InvalidOptionException();
       }
+      $normalizedMap = [];
+      foreach ($normalized as $option) {
+        if ($option['id'] !== NULL) {
+          $normalizedMap[$option['id']] = $option;
+        }
+      }
 
       foreach ($normalized as $option) {
+        $this->renewLocks($questionId);
         if (!$option['image_fid']) {
           continue;
         }
@@ -181,7 +193,10 @@ class OptionStorage {
       }
 
       foreach ($existingById as $id => $oldOption) {
-        if (!in_array($id, $submittedIds, TRUE) && $this->hasVotesForOption($id)) {
+        if (in_array($id, $submittedIds, TRUE)) {
+          continue;
+        }
+        if ($this->hasVotesForOption($id)) {
           throw new OptionInUseException();
         }
       }
@@ -190,6 +205,7 @@ class OptionStorage {
         'attached' => [],
         'released' => [],
       ];
+      $this->renewLocks($questionId);
       $transaction = $this->database->startTransaction();
       try {
         foreach ($existingById as $id => $oldOption) {
@@ -197,24 +213,22 @@ class OptionStorage {
             continue;
           }
           $this->releaseFile($oldOption['image_fid'], $id, $fileJournal);
-          $this->database->delete('simple_voting_option')
-            ->condition('id', $id)
-            ->execute();
+          $this->entityTypeManager->getStorage('voting_option')->load($id)?->delete();
         }
 
         foreach ($normalized as $option) {
           if ($option['id'] !== NULL) {
             $oldOption = $existingById[$option['id']];
-            $this->database->update('simple_voting_option')
-              ->fields([
-                'title' => $option['title'],
-                'description' => $option['description'],
-                'image_fid' => $option['image_fid'],
-                'weight' => $option['weight'],
-              ])
-              ->condition('id', $option['id'])
-              ->condition('question_id', $questionId)
-              ->execute();
+            $optionEntity = $this->entityTypeManager->getStorage('voting_option')->load($option['id']);
+            if (!$optionEntity instanceof VotingOptionInterface
+              || $optionEntity->getQuestionId() !== $questionId) {
+              throw new InvalidOptionException();
+            }
+            $optionEntity->set('title', $option['title']);
+            $optionEntity->set('description', $option['description']);
+            $optionEntity->set('image_fid', $option['image_fid']);
+            $optionEntity->set('weight', $option['weight']);
+            $optionEntity->save();
             $this->syncFileUsage(
               $oldOption['image_fid'],
               $option['image_fid'],
@@ -223,15 +237,15 @@ class OptionStorage {
             );
           }
           else {
-            $optionId = (int) $this->database->insert('simple_voting_option')
-              ->fields([
-                'question_id' => $questionId,
-                'title' => $option['title'],
-                'description' => $option['description'],
-                'image_fid' => $option['image_fid'],
-                'weight' => $option['weight'],
-              ])
-              ->execute();
+            $optionEntity = $this->entityTypeManager->getStorage('voting_option')->create([
+              'question_id' => $questionId,
+              'title' => $option['title'],
+              'description' => $option['description'],
+              'image_fid' => $option['image_fid'],
+              'weight' => $option['weight'],
+            ]);
+            $optionEntity->save();
+            $optionId = (int) $optionEntity->id();
             $this->attachFile($option['image_fid'], $optionId, $fileJournal);
           }
         }
@@ -259,7 +273,7 @@ class OptionStorage {
     }
     finally {
       if ($questionLockAcquired) {
-        $this->mutationLock->release($questionId);
+        $this->mutationLock->release((string) $questionId);
       }
       if ($globalLockAcquired) {
         $this->mutationLock->releaseGlobal();
@@ -270,14 +284,14 @@ class OptionStorage {
   /**
    * Deletes all options for a question after the caller checked vote policy.
    *
-   * @param string $questionId
-   *   The question machine name.
+   * @param int $questionId
+   *   The internal question ID.
    * @param bool $lockHeld
    *   Whether the caller already owns the question mutation lock.
    * @param bool $globalLockHeld
    *   Whether the caller already owns the global mutation gate.
    */
-  public function deleteForQuestion(string $questionId, bool $lockHeld = FALSE, bool $globalLockHeld = FALSE): void {
+  public function deleteForQuestion(int $questionId, bool $lockHeld = FALSE, bool $globalLockHeld = FALSE): void {
     $globalLockAcquired = FALSE;
     $questionLockAcquired = FALSE;
     $fileJournal = [
@@ -291,18 +305,24 @@ class OptionStorage {
         $globalLockAcquired = TRUE;
       }
       if (!$lockHeld) {
-        $this->mutationLock->acquire($questionId);
+        $this->mutationLock->acquire((string) $questionId);
         $questionLockAcquired = TRUE;
       }
 
+      $this->renewLocks($questionId);
       try {
         $options = $this->getOptions($questionId);
         foreach ($options as $option) {
           $this->releaseFile($option['image_fid'], (int) $option['id'], $fileJournal);
         }
-        $this->database->delete('simple_voting_option')
+        $storage = $this->entityTypeManager->getStorage('voting_option');
+        $ids = $storage->getQuery()
+          ->accessCheck(FALSE)
           ->condition('question_id', $questionId)
           ->execute();
+        if ($ids) {
+          $storage->delete($storage->loadMultiple($ids));
+        }
       }
       catch (\Throwable $exception) {
         $this->compensateFileOperations($questionId, $fileJournal);
@@ -315,7 +335,7 @@ class OptionStorage {
     }
     finally {
       if ($questionLockAcquired) {
-        $this->mutationLock->release($questionId);
+        $this->mutationLock->release((string) $questionId);
       }
       if ($globalLockAcquired) {
         $this->mutationLock->releaseGlobal();
@@ -324,14 +344,22 @@ class OptionStorage {
   }
 
   /**
+   * Renews locks held by the current option mutation.
+   */
+  private function renewLocks(int $questionId): void {
+    $this->mutationLock->renewGlobal();
+    $this->mutationLock->renew((string) $questionId);
+  }
+
+  /**
    * Invalidates all read-model tags for a question.
    */
-  private function invalidateQuestion(string $questionId): void {
+  private function invalidateQuestion(int $questionId): void {
     $this->cacheTagsInvalidator->invalidateTags([
-      'config:simple_voting.question.' . $questionId,
+      'voting_question:' . $questionId,
       'simple_voting:question:' . $questionId,
       'simple_voting:question-list',
-      'config:voting_question_list',
+      'voting_question_list',
     ]);
   }
 
@@ -454,12 +482,12 @@ class OptionStorage {
   /**
    * Compensates File API side effects after a database rollback.
    *
-   * @param string $questionId
-   *   The question machine name used for operational logging.
+   * @param int $questionId
+   *   The internal question ID used for operational logging.
    * @param array<string, mixed> $fileJournal
    *   File operations recorded during the failed mutation.
    */
-  private function compensateFileOperations(string $questionId, array $fileJournal): void {
+  private function compensateFileOperations(int $questionId, array $fileJournal): void {
     foreach (array_reverse($fileJournal['attached']) as $operation) {
       $file = $this->entityTypeManager->getStorage('file')->load($operation['fid']);
       if (!$file instanceof FileInterface) {

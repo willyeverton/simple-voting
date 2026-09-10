@@ -26,47 +26,41 @@ final class QuestionPersistenceService {
 
   /**
    * Saves the question and synchronizes its options.
-   *
-   * @param \Drupal\simple_voting\Entity\VotingQuestionInterface $question
-   *   The question entity to save.
-   * @param array<int, array<string, mixed>> $submittedOptions
-   *   The normalized form values for the question's options.
-   *
-   * @return int
-   *   The entity save status.
-   *
-   * @throws \Drupal\simple_voting\Exception\InvalidOptionException
-   * @throws \Drupal\simple_voting\Exception\OptionInUseException
-   * @throws \Drupal\simple_voting\Exception\PersistenceFailureException
    */
   public function save(VotingQuestionInterface $question, array $submittedOptions): int {
-    $questionId = (string) $question->id();
+    $isNew = $question->isNew();
+    $questionId = $isNew ? NULL : (int) $question->id();
     $globalLockAcquired = FALSE;
+    $questionLockAcquired = FALSE;
+    $transaction = NULL;
+
     try {
       $this->mutationLock->acquireGlobal();
       $globalLockAcquired = TRUE;
-      $this->mutationLock->acquire($questionId);
-    }
-    catch (VoteLockUnavailableException $exception) {
-      $this->logger->warning('Question mutation lock unavailable.', [
-        'question_id' => $questionId,
-        'operation' => 'save_question',
-        'exception_class' => $exception::class,
-      ]);
-      if ($globalLockAcquired) {
-        $this->mutationLock->releaseGlobal();
+      if ($questionId !== NULL) {
+        $this->mutationLock->acquire((string) $questionId);
+        $questionLockAcquired = TRUE;
       }
-      throw $exception;
-    }
 
-    $transaction = NULL;
-    try {
+      if ($questionId !== NULL) {
+        $this->optionStorage->assertCanSync($questionId, $submittedOptions);
+      }
       $transaction = $this->database->startTransaction();
+      if (!$isNew) {
+        $this->optionStorage->sync($questionId, $submittedOptions, TRUE, FALSE, TRUE);
+      }
       $status = $question->save();
-      $this->optionStorage->sync($questionId, $submittedOptions, TRUE, FALSE, TRUE);
+      $questionId = (int) $question->id();
+      if (!$questionLockAcquired) {
+        $this->mutationLock->acquire((string) $questionId);
+        $questionLockAcquired = TRUE;
+      }
+      if ($isNew) {
+        $this->optionStorage->sync($questionId, $submittedOptions, TRUE, FALSE, TRUE);
+      }
       unset($transaction);
     }
-    catch (InvalidOptionException | OptionInUseException $exception) {
+    catch (InvalidOptionException | OptionInUseException | VoteLockUnavailableException $exception) {
       if ($transaction !== NULL) {
         $transaction->rollBack();
       }
@@ -76,27 +70,27 @@ final class QuestionPersistenceService {
       if ($transaction !== NULL) {
         $transaction->rollBack();
       }
-      $this->logger->error('Question persistence failed.', [
+      $this->logger->error('Question persistence failed with @exception.', [
+        '@exception' => $exception::class,
         'question_id' => $questionId,
         'operation' => 'save_question',
-        'exception_class' => $exception::class,
       ]);
       throw new PersistenceFailureException(previous: $exception);
     }
     finally {
-      try {
-        $this->mutationLock->release($questionId);
+      if ($questionLockAcquired) {
+        $this->mutationLock->release((string) $questionId);
       }
-      finally {
+      if ($globalLockAcquired) {
         $this->mutationLock->releaseGlobal();
       }
     }
 
     $this->cacheTagsInvalidator->invalidateTags([
-      'config:simple_voting.question.' . $questionId,
+      'voting_question:' . $questionId,
       'simple_voting:question:' . $questionId,
       'simple_voting:question-list',
-      'config:voting_question_list',
+      'voting_question_list',
     ]);
 
     return $status;

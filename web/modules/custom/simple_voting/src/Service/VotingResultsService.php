@@ -5,6 +5,7 @@ namespace Drupal\simple_voting\Service;
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Statement\FetchAs;
+use Drupal\simple_voting\Exception\QuestionNotFoundException;
 
 /**
  * Shared read model for CMS, block, and API results.
@@ -22,10 +23,13 @@ final class VotingResultsService {
    * @return array{data: array<string, mixed>, cache: \Drupal\Core\Cache\CacheableMetadata}
    *   The result data and its cacheability metadata.
    */
-  public function getResults(string $questionId): array {
-    $question = $this->questionRead->requireQuestion($questionId);
+  public function getResults(int $questionId): array {
+    $question = $this->questionRead->loadById($questionId);
+    if ($question === NULL) {
+      throw new QuestionNotFoundException();
+    }
 
-    $query = $this->database->select('simple_voting_option', 'o');
+    $query = $this->database->select('voting_option', 'o');
     $query->fields('o', ['id', 'title', 'weight']);
     $query->leftJoin(
       'simple_voting_vote',
@@ -61,7 +65,7 @@ final class VotingResultsService {
 
     $cache = (new CacheableMetadata())
       ->addCacheTags([
-        'config:simple_voting.question.' . $questionId,
+        'voting_question:' . $questionId,
         'simple_voting:question:' . $questionId,
       ])
       ->addCacheContexts(['user.permissions']);

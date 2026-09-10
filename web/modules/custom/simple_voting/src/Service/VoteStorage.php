@@ -14,7 +14,7 @@ class VoteStorage {
   /**
    * Determines whether a user already voted on a question.
    */
-  public function hasVote(string $questionId, int $uid): bool {
+  public function hasVote(int $questionId, int $uid): bool {
     return (bool) $this->database->select('simple_voting_vote', 'v')
       ->fields('v', ['id'])
       ->condition('question_id', $questionId)
@@ -27,7 +27,7 @@ class VoteStorage {
   /**
    * Returns the option selected by a user, or NULL when not voted.
    */
-  public function getVotedOption(string $questionId, int $uid): ?int {
+  public function getVotedOption(int $questionId, int $uid): ?int {
     $optionId = $this->database->select('simple_voting_vote', 'v')
       ->fields('v', ['option_id'])
       ->condition('question_id', $questionId)
@@ -40,7 +40,7 @@ class VoteStorage {
   }
 
   /**
-   * Returns all question IDs voted by a user from a known set.
+   * Returns all internal question IDs voted by a user from a known set.
    */
   public function getVotedQuestionIds(int $uid, array $questionIds): array {
     if ($uid <= 0 || !$questionIds) {
@@ -48,7 +48,7 @@ class VoteStorage {
     }
 
     return array_map(
-      'strval',
+      'intval',
       $this->database->select('simple_voting_vote', 'v')
         ->fields('v', ['question_id'])
         ->condition('uid', $uid)
@@ -61,7 +61,7 @@ class VoteStorage {
   /**
    * Inserts an immutable vote record.
    */
-  public function insert(string $questionId, int $optionId, int $uid, int $timestamp): int {
+  public function insert(int $questionId, int $optionId, int $uid, int $timestamp): int {
     return (int) $this->database->insert('simple_voting_vote')
       ->fields([
         'question_id' => $questionId,
@@ -75,7 +75,7 @@ class VoteStorage {
   /**
    * Returns whether a question has any votes.
    */
-  public function hasVotesForQuestion(string $questionId): bool {
+  public function hasVotesForQuestion(int $questionId): bool {
     return (bool) $this->database->select('simple_voting_vote', 'v')
       ->fields('v', ['id'])
       ->condition('question_id', $questionId)
