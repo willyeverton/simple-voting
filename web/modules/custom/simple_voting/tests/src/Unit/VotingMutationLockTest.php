@@ -24,7 +24,7 @@ final class VotingMutationLockTest extends TestCase {
       ->method('acquire')
       ->with(
         self::stringStartsWith('simple_voting.question_mutation.'),
-        30.0,
+        300.0,
       )
       ->willReturnOnConsecutiveCalls(FALSE, TRUE);
     $lock->expects(self::once())
@@ -47,7 +47,7 @@ final class VotingMutationLockTest extends TestCase {
     $lock = $this->createMock(LockBackendInterface::class);
     $lock->expects(self::once())
       ->method('acquire')
-      ->with('simple_voting.config_import', 30.0)
+      ->with('simple_voting.config_import', 300.0)
       ->willReturn(TRUE);
     $lock->expects(self::once())
       ->method('release')
@@ -59,6 +59,21 @@ final class VotingMutationLockTest extends TestCase {
   }
 
   /**
+   * Renewing a held question lock extends its lease.
+   *
+   * @covers ::renew
+   */
+  public function testRenewReacquiresTheHeldQuestionLock(): void {
+    $lock = $this->createMock(LockBackendInterface::class);
+    $lock->expects(self::once())
+      ->method('acquire')
+      ->with(self::stringStartsWith('simple_voting.question_mutation.'), 300.0)
+      ->willReturn(TRUE);
+
+    (new VotingMutationLock($lock))->renew('favorite_color');
+  }
+
+  /**
    * @covers ::acquire
    */
   public function testUnavailableLockProducesDomainFailure(): void {
@@ -67,7 +82,7 @@ final class VotingMutationLockTest extends TestCase {
       ->method('acquire')
       ->with(
         self::stringStartsWith('simple_voting.question_mutation.'),
-        30.0,
+        300.0,
       )
       ->willReturn(FALSE);
     $lock->expects(self::exactly(2))

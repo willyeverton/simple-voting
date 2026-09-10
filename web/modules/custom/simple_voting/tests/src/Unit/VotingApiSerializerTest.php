@@ -21,7 +21,8 @@ final class VotingApiSerializerTest extends TestCase {
    */
   public function testQuestionSummaryContainsStableFields(): void {
     $question = $this->createMock(VotingQuestionInterface::class);
-    $question->method('id')->willReturn('example-question');
+    $question->method('id')->willReturn(42);
+    $question->method('getMachineName')->willReturn('example_question');
     $question->method('label')->willReturn('Example question');
     $question->method('isOpen')->willReturn(TRUE);
     $question->method('showsResults')->willReturn(FALSE);
@@ -32,7 +33,7 @@ final class VotingApiSerializerTest extends TestCase {
     );
 
     self::assertSame([
-      'id' => 'example-question',
+      'id' => 'example_question',
       'title' => 'Example question',
       'status' => 'open',
       'show_results' => FALSE,
@@ -46,7 +47,8 @@ final class VotingApiSerializerTest extends TestCase {
    */
   public function testQuestionLoadsImageFilesInBatch(): void {
     $question = $this->createMock(VotingQuestionInterface::class);
-    $question->method('id')->willReturn('example-question');
+    $question->method('id')->willReturn(42);
+    $question->method('getMachineName')->willReturn('example_question');
     $question->method('label')->willReturn('Example question');
     $question->method('isOpen')->willReturn(TRUE);
     $question->method('showsResults')->willReturn(TRUE);

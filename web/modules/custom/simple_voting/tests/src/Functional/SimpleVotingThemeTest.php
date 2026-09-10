@@ -47,17 +47,15 @@ final class SimpleVotingThemeTest extends BrowserTestBase {
   }
 
   /**
-   * Repeated theme updates preserve the original frontend theme for rollback.
+   * Theme updates do not change the configured frontend theme.
    */
-  public function testThemeUpdateStoresPreviousFrontendThemeOnce(): void {
+  public function testThemeUpdatePreservesExistingFrontendTheme(): void {
     $theme_config = \Drupal::configFactory()->getEditable('system.theme');
     $theme_config->set('default', 'stark')->save();
 
     \simple_voting_update_11004();
-    self::assertSame('stark', \Drupal::state()->get('simple_voting.previous_default_theme'));
-
-    \simple_voting_update_11004();
-    self::assertSame('stark', \Drupal::state()->get('simple_voting.previous_default_theme'));
+    self::assertSame('stark', \Drupal::config('system.theme')->get('default'));
+    self::assertNull(\Drupal::state()->get('simple_voting.previous_default_theme'));
   }
 
   /**
@@ -75,14 +73,15 @@ final class SimpleVotingThemeTest extends BrowserTestBase {
   /**
    * The theme update preserves the configured administrative theme.
    */
-  public function testThemeUpdatePreservesAdminTheme(): void {
+  public function testThemeUpdatePreservesAdminAndFrontendThemes(): void {
     $theme_config = \Drupal::configFactory()->getEditable('system.theme');
+    $theme_config->set('default', 'stark')->save();
     $admin_theme = $theme_config->get('admin');
 
     \simple_voting_update_11004();
 
     $theme_config = \Drupal::config('system.theme');
-    self::assertSame('simple_voting_theme', $theme_config->get('default'));
+    self::assertSame('stark', $theme_config->get('default'));
     self::assertSame($admin_theme, $theme_config->get('admin'));
   }
 

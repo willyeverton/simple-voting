@@ -33,7 +33,7 @@ final class VotingConfigImportSubscriberTest extends TestCase {
     $backend = $this->createMock(LockBackendInterface::class);
     $backend->expects(self::once())
       ->method('acquire')
-      ->with('simple_voting.config_import', 30.0)
+      ->with('simple_voting.config_import', 300.0)
       ->willReturn(TRUE);
     $backend->expects(self::once())
       ->method('release')
@@ -68,7 +68,7 @@ final class VotingConfigImportSubscriberTest extends TestCase {
     $backend = $this->createMock(LockBackendInterface::class);
     $backend->expects(self::once())
       ->method('acquire')
-      ->with('simple_voting.config_import', 30.0)
+      ->with('simple_voting.config_import', 300.0)
       ->willReturn(TRUE);
     $backend->expects(self::once())
       ->method('release')
@@ -81,6 +81,36 @@ final class VotingConfigImportSubscriberTest extends TestCase {
     );
 
     $subscriber->onConfigImporterValidate(new ConfigImporterEvent($importer));
+  }
+
+  /**
+   * Validation errors added by another subscriber release the gate.
+   *
+   * @covers ::onConfigImporterValidateComplete
+   */
+  public function testExternalValidationErrorReleasesGlobalMutationGate(): void {
+    $importer = $this->createMock(ConfigImporter::class);
+    $comparer = $this->createMock(StorageComparerInterface::class);
+    $comparer->method('getChangelist')->willReturn([]);
+    $importer->method('getStorageComparer')->willReturn($comparer);
+    $importer->method('getErrors')->willReturn(['another validation error']);
+    $backend = $this->createMock(LockBackendInterface::class);
+    $backend->expects(self::once())
+      ->method('acquire')
+      ->with('simple_voting.config_import', 300.0)
+      ->willReturn(TRUE);
+    $backend->expects(self::once())
+      ->method('release')
+      ->with('simple_voting.config_import');
+
+    $subscriber = new VotingConfigImportSubscriber(
+      $this->createMock(Connection::class),
+      $this->translation(),
+      new VotingMutationLock($backend),
+    );
+
+    $subscriber->onConfigImporterValidate(new ConfigImporterEvent($importer));
+    $subscriber->onConfigImporterValidateComplete(new ConfigImporterEvent($importer));
   }
 
   /**

@@ -40,16 +40,16 @@ final class SimpleVotingApiAccessTest extends BrowserTestBase {
   }
 
   /**
-   * A disabled global vote switch hides the external voting catalogue.
+   * A disabled global vote switch blocks every API read endpoint.
    */
-  public function testDisabledVotingReturnsEmptyApiCatalogue(): void {
+  public function testDisabledVotingBlocksEveryApiReadEndpoint(): void {
     $account = $this->drupalCreateUser(['access simple voting API']);
     $this->drupalLogin($account);
 
     $question = \Drupal::entityTypeManager()
       ->getStorage('voting_question')
       ->create([
-        'id' => 'api_visible_question',
+        'machine_name' => 'api_visible_question',
         'title' => 'API visible question',
         'status' => TRUE,
       ]);
@@ -60,10 +60,14 @@ final class SimpleVotingApiAccessTest extends BrowserTestBase {
       ->set('voting_enabled', FALSE)
       ->save();
 
-    $this->drupalGet('/api/v1/questions');
-
-    self::assertSame(200, $this->getSession()->getStatusCode());
-    self::assertSame(['data' => []], json_decode($this->getSession()->getPage()->getContent(), TRUE));
+    foreach ([
+      '/api/v1/questions',
+      '/api/v1/questions/api_visible_question',
+      '/api/v1/questions/api_visible_question/results',
+    ] as $path) {
+      $this->drupalGet($path);
+      self::assertSame(503, $this->getSession()->getStatusCode(), $path);
+    }
   }
 
 }

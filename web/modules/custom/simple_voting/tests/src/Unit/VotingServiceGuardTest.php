@@ -8,7 +8,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Transaction;
-use Drupal\Core\Lock\LockBackendInterface;
+use Drupal\simple_voting\Service\VotingAvailabilityService;
 use Drupal\simple_voting\Entity\VotingQuestionInterface;
 use Drupal\simple_voting\Exception\InvalidOptionException;
 use Drupal\simple_voting\Exception\PersistenceFailureException;
@@ -17,7 +17,6 @@ use Drupal\simple_voting\Exception\VotingDisabledException;
 use Drupal\simple_voting\Service\OptionStorage;
 use Drupal\simple_voting\Service\QuestionReadService;
 use Drupal\simple_voting\Service\VoteStorage;
-use Drupal\simple_voting\Service\VotingMutationLock;
 use Drupal\simple_voting\Service\VotingService;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -61,16 +60,17 @@ final class VotingServiceGuardTest extends TestCase {
   }
 
   /**
-   * @covers ::castVote
+   * The vote hot path has no lock dependency.
    */
-  public function testLockIsReleasedWhenVotingIsDisabled(): void {
-    $lock = $this->createMock(LockBackendInterface::class);
-    $lock->expects(self::exactly(2))->method('acquire')->willReturn(TRUE);
-    $lock->expects(self::exactly(2))->method('release');
+  public function testConstructorDoesNotAcceptLockDependency(): void {
+    $parameters = (new \ReflectionMethod(VotingService::class, '__construct'))->getParameters();
+    $types = array_map(
+      static fn (\ReflectionParameter $parameter): string => (string) $parameter->getType(),
+      $parameters,
+    );
 
-    $service = $this->createService(FALSE, lock: $lock);
-    $this->expectException(VotingDisabledException::class);
-    $service->castVote('question', 1, 10);
+    self::assertNotContains('Drupal\\Core\\Lock\\LockBackendInterface', $types);
+    self::assertNotContains('Drupal\\simple_voting\\Service\\VotingMutationLock', $types);
   }
 
   /**
@@ -79,6 +79,7 @@ final class VotingServiceGuardTest extends TestCase {
   public function testOptionMustBelongToQuestion(): void {
     $question = $this->createMock(VotingQuestionInterface::class);
     $question->method('isOpen')->willReturn(TRUE);
+    $question->method('id')->willReturn(42);
     $questionRead = $this->createMock(QuestionReadService::class);
     $questionRead->method('requireQuestion')->willReturn($question);
     $optionStorage = $this->createMock(OptionStorage::class);
@@ -100,6 +101,7 @@ final class VotingServiceGuardTest extends TestCase {
 
     $question = $this->createMock(VotingQuestionInterface::class);
     $question->method('isOpen')->willReturn(TRUE);
+    $question->method('id')->willReturn(42);
     $questionRead = $this->createMock(QuestionReadService::class);
     $questionRead->method('requireQuestion')->willReturn($question);
 
@@ -124,7 +126,7 @@ final class VotingServiceGuardTest extends TestCase {
       /**
        * Tracks vote existence checks and reports no existing vote.
        */
-      public function hasVote(string $questionId, int $uid): bool {
+      public function hasVote(int $questionId, int $uid): bool {
         $this->hasVoteCalls++;
         return FALSE;
       }
@@ -133,7 +135,7 @@ final class VotingServiceGuardTest extends TestCase {
        * Simulates an unexpected failure during vote insertion.
        */
       public function insert(
-        string $questionId,
+        int $questionId,
         int $optionId,
         int $uid,
         int $timestamp,
@@ -178,16 +180,12 @@ final class VotingServiceGuardTest extends TestCase {
       ->method('startTransaction')
       ->willReturn($transaction);
 
-    $lock = $this->createMock(LockBackendInterface::class);
-    $lock->method('acquire')->willReturn(TRUE);
-
     $service = new VotingService(
-      $configFactory,
+      new VotingAvailabilityService($configFactory),
       $database,
       $questionRead,
       $optionStorage,
       $voteStorage,
-      new VotingMutationLock($lock),
       $this->createMock(TimeInterface::class),
       $this->createMock(CacheTagsInvalidatorInterface::class),
       $this->createMock(LoggerInterface::class),
@@ -199,7 +197,7 @@ final class VotingServiceGuardTest extends TestCase {
     }
     catch (PersistenceFailureException) {
       self::assertTrue($transaction->rolledBack);
-      self::assertSame(1, $voteStorage->hasVoteCalls);
+      self::assertSame(0, $voteStorage->hasVoteCalls);
     }
   }
 
@@ -211,7 +209,6 @@ final class VotingServiceGuardTest extends TestCase {
     ?ConfigFactoryInterface $configFactory = NULL,
     ?QuestionReadService $questionRead = NULL,
     ?OptionStorage $optionStorage = NULL,
-    ?LockBackendInterface $lock = NULL,
   ): VotingService {
     if ($configFactory === NULL) {
       $config = $this->createMock(ImmutableConfig::class);
@@ -219,18 +216,12 @@ final class VotingServiceGuardTest extends TestCase {
       $configFactory = $this->createMock(ConfigFactoryInterface::class);
       $configFactory->method('get')->with('simple_voting.settings')->willReturn($config);
     }
-    if ($lock === NULL) {
-      $lock = $this->createMock(LockBackendInterface::class);
-      $lock->method('acquire')->willReturn(TRUE);
-    }
-
     return new VotingService(
-      $configFactory,
+      new VotingAvailabilityService($configFactory),
       $this->createMock(Connection::class),
       $questionRead ?? $this->createMock(QuestionReadService::class),
       $optionStorage ?? $this->createMock(OptionStorage::class),
       $this->createMock(VoteStorage::class),
-      new VotingMutationLock($lock),
       $this->createMock(TimeInterface::class),
       $this->createMock(CacheTagsInvalidatorInterface::class),
       $this->createMock(LoggerInterface::class),

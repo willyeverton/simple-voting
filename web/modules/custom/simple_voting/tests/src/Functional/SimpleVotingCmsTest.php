@@ -42,7 +42,7 @@ final class SimpleVotingCmsTest extends BrowserTestBase {
     $question = \Drupal::entityTypeManager()
       ->getStorage('voting_question')
       ->create([
-        'id' => 'hidden_question',
+        'machine_name' => 'hidden_question',
         'title' => 'Hidden question',
         'status' => FALSE,
         'show_results' => FALSE,
@@ -56,6 +56,44 @@ final class SimpleVotingCmsTest extends BrowserTestBase {
   }
 
   /**
+   * An authenticated voter can submit one vote through the CMS form.
+   */
+  public function testAuthenticatedVoterCanSubmitVote(): void {
+    $account = $this->drupalCreateUser(['vote in polls']);
+    $this->drupalLogin($account);
+
+    $question = \Drupal::entityTypeManager()
+      ->getStorage('voting_question')
+      ->create([
+        'machine_name' => 'cms_vote_question',
+        'title' => 'CMS vote question',
+        'status' => TRUE,
+        'show_results' => TRUE,
+      ]);
+    $question->save();
+    $option = \Drupal::entityTypeManager()
+      ->getStorage('voting_option')
+      ->create([
+        'question_id' => $question->id(),
+        'title' => 'First option',
+        'description' => '',
+        'weight' => 0,
+      ]);
+    $option->save();
+    $optionId = (int) $option->id();
+
+    $this->drupalGet('/voting/cms_vote_question/results');
+    $this->assertSession()->pageTextContains('Results are not available for this question.');
+
+    $this->drupalGet('/voting/cms_vote_question');
+    $this->submitForm(['option_id' => (string) $optionId], 'Register vote');
+
+    $this->assertSession()->statusCodeEquals(200);
+    $this->assertSession()->pageTextContains('Total votes: 1');
+    $this->assertSession()->pageTextContains('First option');
+  }
+
+  /**
    * The disabled catalogue does not expose question links.
    */
   public function testDisabledVotingHidesQuestionList(): void {
@@ -65,7 +103,7 @@ final class SimpleVotingCmsTest extends BrowserTestBase {
     $question = \Drupal::entityTypeManager()
       ->getStorage('voting_question')
       ->create([
-        'id' => 'visible_question',
+        'machine_name' => 'visible_question',
         'title' => 'Visible question',
         'status' => TRUE,
       ]);
@@ -78,11 +116,13 @@ final class SimpleVotingCmsTest extends BrowserTestBase {
 
     $this->drupalGet('/voting');
 
-    $this->assertSession()->pageTextContains(
-      'Voting is temporarily disabled. Existing authorized results '
-      . 'remain available.',
-    );
+    $this->assertSession()->pageTextContains('Voting is temporarily disabled.');
     $this->assertSession()->linkNotExists('Visible question');
+
+    foreach (['/voting/visible_question', '/voting/visible_question/results'] as $path) {
+      $this->drupalGet($path);
+      $this->assertSession()->pageTextContains('Voting is temporarily disabled.');
+    }
   }
 
 }
