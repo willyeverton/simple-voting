@@ -1,157 +1,85 @@
 {
   "info": {
     "name": "Simple Voting API",
-    "description": "Collection alinhada a docs/openapi.yaml para execução local. Requer uma instalação Drupal, autenticação em todos os endpoints e permissões específicas para votar e consultar resultados ocultos. Os cenários de erro e concorrência devem ser validados conforme docs/runbook.md.",
+    "description": "Contrato manual alinhado a docs/openapi.yaml. question_id é o machine_name público estável. Defina global_off=true somente ao testar o desligamento: catálogo, detalhe, voto e resultados devem responder 503 VOTING_DISABLED. No fluxo comum, resultados exigem voto prévio e show_results=true; view voting results é bypass. A collection não contém secrets e não prova concorrência por execução sequencial.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "base_url",
-      "value": "https://simple-voting.lndo.site"
-    },
-    {
-      "key": "question_id",
-      "value": "pergunta_exemplo"
-    },
-    {
-      "key": "option_id",
-      "value": "1"
-    },
-    {
-      "key": "csrf_token",
-      "value": ""
-    }
+    { "key": "base_url", "value": "https://simple-voting.lndo.site" },
+    { "key": "question_id", "value": "pergunta_exemplo" },
+    { "key": "option_id", "value": "1" },
+    { "key": "csrf_token", "value": "" },
+    { "key": "global_off", "value": "false" },
+    { "key": "expected_results_status", "value": "403" }
   ],
   "auth": {
     "type": "basic",
     "basic": [
-      {
-        "key": "username",
-        "value": "admin",
-        "type": "string"
-      },
-      {
-        "key": "password",
-        "value": "",
-        "type": "string"
-      }
+      { "key": "username", "value": "", "type": "string" },
+      { "key": "password", "value": "", "type": "string" }
     ]
   },
   "item": [
     {
       "name": "List questions",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
-              "pm.test('Response contains data array', function () { pm.expect(pm.response.json().data).to.be.an('array'); });"
-            ]
-          }
-        }
-      ],
       "request": {
+        "description": "Lista Content Entities de pergunta publicadas. Global off deve retornar 503, nunca data vazio.",
         "method": "GET",
         "header": [],
-        "url": {
-          "raw": "{{base_url}}/api/v1/questions",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "questions"]
-        }
-      }
+        "url": { "raw": "{{base_url}}/api/v1/questions", "host": ["{{base_url}}"], "path": ["api", "v1", "questions"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const off = pm.collectionVariables.get('global_off') === 'true';",
+        "pm.test(off ? 'HTTP 503' : 'HTTP 200', () => pm.response.to.have.status(off ? 503 : 200));",
+        "pm.test('Contract body', () => { const body = pm.response.json(); off ? pm.expect(body.code).to.eql('VOTING_DISABLED') : pm.expect(body.data).to.be.an('array'); });"
+      ] } }]
     },
     {
       "name": "Get question",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
-              "pm.test('Question contains options', function () { pm.expect(pm.response.json().data.options).to.be.an('array'); });"
-            ]
-          }
-        }
-      ],
       "request": {
+        "description": "Resolve a pergunta pelo machine_name público imutável. Global off deve retornar 503.",
         "method": "GET",
         "header": [],
-        "url": {
-          "raw": "{{base_url}}/api/v1/questions/{{question_id}}",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "questions", "{{question_id}}"]
-        }
-      }
+        "url": { "raw": "{{base_url}}/api/v1/questions/{{question_id}}", "host": ["{{base_url}}"], "path": ["api", "v1", "questions", "{{question_id}}"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const off = pm.collectionVariables.get('global_off') === 'true';",
+        "pm.test(off ? 'HTTP 503' : 'HTTP 200', () => pm.response.to.have.status(off ? 503 : 200));",
+        "pm.test('Contract body', () => { const body = pm.response.json(); off ? pm.expect(body.code).to.eql('VOTING_DISABLED') : pm.expect(body.data.options).to.be.an('array'); });"
+      ] } }]
     },
     {
       "name": "Create vote",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('HTTP 201', function () { pm.response.to.have.status(201); });",
-              "pm.test('Response contains message', function () { pm.expect(pm.response.json().message).to.be.a('string'); });"
-            ]
-          }
-        }
-      ],
       "request": {
+        "description": "Cria registro interno. Repetição deve produzir 409 DUPLICATE_VOTE pela unique constraint; global off deve produzir 503. Execução sequencial não comprova concorrência.",
         "method": "POST",
         "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          },
-          {
-            "key": "X-CSRF-Token",
-            "value": "{{csrf_token}}",
-            "disabled": true
-          }
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-CSRF-Token", "value": "{{csrf_token}}", "disabled": true }
         ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"option_id\": {{option_id}}\n}",
-          "options": {
-            "raw": {
-              "language": "json"
-            }
-          }
-        },
-        "url": {
-          "raw": "{{base_url}}/api/v1/questions/{{question_id}}/votes",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "questions", "{{question_id}}", "votes"]
-        }
-      }
+        "body": { "mode": "raw", "raw": "{\n  \"option_id\": {{option_id}}\n}", "options": { "raw": { "language": "json" } } },
+        "url": { "raw": "{{base_url}}/api/v1/questions/{{question_id}}/votes", "host": ["{{base_url}}"], "path": ["api", "v1", "questions", "{{question_id}}", "votes"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const off = pm.collectionVariables.get('global_off') === 'true';",
+        "pm.test(off ? 'HTTP 503' : 'HTTP 201', () => pm.response.to.have.status(off ? 503 : 201));",
+        "pm.test('Contract body', () => { const body = pm.response.json(); off ? pm.expect(body.code).to.eql('VOTING_DISABLED') : pm.expect(body.message).to.be.a('string'); });"
+      ] } }]
     },
     {
       "name": "Get results",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('HTTP 200', function () { pm.response.to.have.status(200); });",
-              "pm.test('Results contain totals', function () { pm.expect(pm.response.json().data.total_votes).to.be.a('number'); });"
-            ]
-          }
-        }
-      ],
       "request": {
+        "description": "Sem bypass: 200 somente após o usuário votar e se show_results=true; caso contrário 403. Com view voting results, voto prévio e show_results são bypassados. Ajuste expected_results_status para 403 ou 200 conforme o usuário/cenário. Global off sempre retorna 503.",
         "method": "GET",
         "header": [],
-        "url": {
-          "raw": "{{base_url}}/api/v1/questions/{{question_id}}/results",
-          "host": ["{{base_url}}"],
-          "path": ["api", "v1", "questions", "{{question_id}}", "results"]
-        }
-      }
+        "url": { "raw": "{{base_url}}/api/v1/questions/{{question_id}}/results", "host": ["{{base_url}}"], "path": ["api", "v1", "questions", "{{question_id}}", "results"] }
+      },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "const off = pm.collectionVariables.get('global_off') === 'true';",
+        "const expected = off ? 503 : Number(pm.collectionVariables.get('expected_results_status'));",
+        "pm.test(`HTTP ${expected}`, () => pm.response.to.have.status(expected));",
+        "pm.test('Contract body', () => { const body = pm.response.json(); if (off) { pm.expect(body.code).to.eql('VOTING_DISABLED'); } else if (expected === 200) { pm.expect(body.data.total_votes).to.be.a('number'); } else { pm.expect(expected).to.eql(403); pm.expect(body.code).to.be.a('string'); } });"
+      ] } }]
     }
   ]
 }

@@ -63,7 +63,7 @@ Se o site já estiver instalado, pule o instalador e execute apenas a habilitaç
 
 ### Restaurar o dump em ambiente limpo
 
-O dump de demonstração fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Ele foi preparado para uma instalação Drupal nova e contém configuração, `core.extension`, `key_value`, blocos e schemas, sem usuários, sessões, votos, logs, caches ou dados temporários de teste.
+O dump de demonstração obrigatório fica em [`dump/simple-voting-demo.sql`](dump/simple-voting-demo.sql). Como o modelo passou a usar Content Entities customizadas para perguntas e opções, o artefato deve ser **regenerado** após aplicar o schema atual e cadastrar dados demonstrativos. Até essa regeneração e um restore limpo serem comprovados, não presuma que o SQL versionado representa o código/modelo atual. O dump final deve conter os schemas e dados demonstrativos necessários, sem usuários, sessões, votos, logs, caches, secrets ou dados temporários de teste.
 
 Use uma cópia separada do projeto e um nome Lando diferente do ambiente de desenvolvimento. Depois da instalação limpa do Drupal, execute **nesta ordem**:
 
@@ -74,7 +74,7 @@ lando drush updb -y
 lando drush cr
 ```
 
-O dump preserva o estado de módulos/configuração do ambiente de demonstração e contém uma definição vazia de `simple_voting_vote`, sem registros de votos. Depois do import, crie um administrador local, pois dados de usuários não são transportados:
+Depois de regenerado, o dump deve preservar o estado mínimo de módulos/configuração, as tabelas das Content Entities e uma definição vazia de `simple_voting_vote`, sem registros de votos. Depois do import, crie um administrador local, pois dados de usuários não são transportados:
 
 ```bash
 read -r -s DEMO_PASSWORD
@@ -86,16 +86,24 @@ unset DEMO_PASSWORD
 Confirme também os dados demonstrativos:
 
 ```bash
-lando drush sql:query "SELECT COUNT(*) AS questions FROM config WHERE name LIKE 'simple_voting.question.%';"
-lando drush sql:query "SELECT COUNT(*) AS options FROM simple_voting_option;"
+lando drush sql:query "SELECT COUNT(*) AS questions FROM voting_question;"
+lando drush sql:query "SELECT COUNT(*) AS options FROM voting_option;"
 lando drush sql:query "SELECT COUNT(*) AS votes FROM simple_voting_vote;"
 ```
 
-O conteúdo esperado do dump atual é `3` perguntas, `6` opções e `0` votos. Esses valores descrevem o artefato SQL; confirme-os somente após restaurar o dump em uma instalação nova. Se `simple_voting_vote` não existir depois do import, interrompa o procedimento e não prossiga com um banco parcialmente restaurado.
+Defina e registre as quantidades esperadas no momento da regeneração; a única contagem obrigatoriamente nula é a de votos. Confirme os valores somente após restaurar o dump regenerado em uma instalação nova. Se `voting_question`, `voting_option` ou `simple_voting_vote` não existir depois do import, interrompa o procedimento e não prossiga com um banco parcialmente restaurado.
 
 O uninstall do módulo é bloqueado quando existem opções ou votos. Uma remoção destrutiva exige backup verificado e confirmação operacional explícita por meio do procedimento documentado em [`docs/runbook.md`](docs/runbook.md).
 
-Ao instalar o módulo em um site novo, ou ao aplicar `updb` em um site existente, o tema `simple_voting_theme` é instalado e definido como tema frontend padrão. O tema administrativo configurado não é alterado.
+Ao instalar o módulo em um site novo, ou ao aplicar `updb` em um site existente, o tema `simple_voting_theme` é instalado e permanece disponível, mas o tema frontend configurado não é alterado. A ativação deve ser uma decisão explícita da aplicação.
+
+Para usar a apresentação demonstrativa:
+
+```bash
+lando drush theme:enable simple_voting_theme -y
+lando drush config:set system.theme default simple_voting_theme -y
+lando drush cr
+```
 
 Para restaurar outro tema frontend posteriormente:
 
@@ -111,18 +119,17 @@ O módulo cria as seguintes permissões:
 - `administer simple voting`: administrar perguntas, opções, lifecycle e configuração;
 - `access simple voting API`: acessar a API manual;
 - `vote in polls`: acessar o CMS e registrar votos;
-- `view voting results`: consultar resultados ocultos.
+- `view voting results`: consultar resultados antes de votar ou quando estiverem ocultos (bypass explícito).
 
 Conceda as permissões a roles locais pela interface administrativa ou por procedimento operacional equivalente. Não conceda `administer simple voting` a usuários comuns.
 
 Para criar a primeira pergunta:
 
 1. acesse `/admin/config/simple-voting/questions`;
-2. crie uma pergunta com identificador estável;
-3. informe ao menos uma opção;
+2. crie a Content Entity de pergunta com `machine_name` público, único e imutável;
+3. informe ao menos uma Content Entity de opção;
 4. defina `show_results`;
-5. mantenha a pergunta fechada até terminar a revisão;
-6. abra a pergunta somente quando ela estiver pronta para receber votos.
+5. publique/abra a pergunta quando estiver pronta. Opções podem ser ajustadas administrativamente enquanto não houver votos.
 
 A votação global pode ser controlada em:
 
@@ -151,10 +158,12 @@ A API manual não usa JSON:API para a lógica central. Todos os endpoints exigem
 
 | Método | Endpoint | Finalidade |
 |---|---|---|
-| `GET` | `/api/v1/questions` | Lista perguntas abertas disponíveis; retorna catálogo vazio quando a votação global está desabilitada |
-| `GET` | `/api/v1/questions/{question_id}` | Consulta uma pergunta conhecida, inclusive fechada |
-| `POST` | `/api/v1/questions/{question_id}/votes` | Registra um voto |
-| `GET` | `/api/v1/questions/{question_id}/results` | Consulta resultados conforme a política de visibilidade |
+| `GET` | `/api/v1/questions` | Lista perguntas publicadas disponíveis |
+| `GET` | `/api/v1/questions/{question_id}` | Consulta pelo `machine_name` público estável |
+| `POST` | `/api/v1/questions/{question_id}/votes` | Registra um voto interno |
+| `GET` | `/api/v1/questions/{question_id}/results` | Retorna resultados após o voto quando `show_results=true`, ou por bypass |
+
+Com a votação global desligada, **todos** esses endpoints respondem `503 VOTING_DISABLED`; CMS também bloqueia catálogo, detalhe, voto e resultados. O desligamento não retorna catálogo vazio nem permite leitura histórica.
 
 O body do voto contém somente:
 
@@ -170,7 +179,8 @@ O body do voto contém somente:
 - sessão Drupal pode ser usada por clientes no mesmo contexto;
 - requisições de sessão que alteram estado precisam do header `X-CSRF-Token`;
 - `access simple voting API` não concede automaticamente `vote in polls`;
-- resultados ocultos exigem também `view voting results`.
+- no fluxo comum, resultados exigem voto prévio e `show_results=true`;
+- `view voting results` bypassa tanto o voto prévio quanto `show_results`.
 
 Exemplo de leitura com Basic Auth, usando variáveis locais não versionadas:
 
@@ -185,10 +195,6 @@ curl --fail-with-body \
 ```
 
 A especificação está em [`docs/openapi.yaml`](docs/openapi.yaml), e a collection está em [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json).
-
-## Executar testes e quality gates
-
-Os comandos abaixo são executados pelo usuário dentro do Lando. O projeto possui scripts que ignoram a etapa quando ainda não há arquivos do tipo correspondente, mas isso não substitui a execução depois da implementação.
 
 ### Testes PHPUnit unitários
 
@@ -246,7 +252,22 @@ lando phpunit
 lando quality
 ```
 
-`lando quality` executa Composer validate, Composer audit, PHPCS, PHPStan e PHPUnit Unit em sequência. O workflow remoto mantém essa mesma sequência. Kernel/Functional e concorrência dependem de um Drupal instalado e devem ser executados localmente com `lando phpunit-drupal` e banco real; não são executados no workflow remoto atual. Não use flags para ignorar auditorias, requisitos de plataforma ou falhas de segurança.
+`lando quality` executa Composer validate, Composer audit, PHPCS, PHPStan e PHPUnit Unit em sequência. Para executar a mesma sequência e, depois, Kernel/Functional no ambiente Drupal instalado, use:
+
+```bash
+lando quality-drupal
+```
+
+O comando exige `SIMPLETEST_DB` e `SIMPLETEST_BASE_URL` configurados no appserver. Para manter as variáveis no mesmo shell do appserver:
+
+```bash
+lando ssh
+export SIMPLETEST_DB='mysql://USUARIO:SENHA@database/NOME_DO_BANCO'
+export SIMPLETEST_BASE_URL='https://simple-voting.lndo.site'
+bash /app/scripts/quality-drupal.sh
+```
+
+O workflow remoto mantém somente os gates estáticos e Unit; Kernel/Functional e concorrência continuam fora do CI, mas agora possuem um comando local único. Não use flags para ignorar auditorias, requisitos de plataforma ou falhas de segurança.
 
 ### Verificação completa do ambiente instalado
 
@@ -297,13 +318,17 @@ lando drush cr
 - [`docs/security-threat-model.md`](docs/security-threat-model.md): controles de segurança;
 - [`docs/error-catalog.md`](docs/error-catalog.md): códigos e respostas de erro;
 - [`docs/runbook.md`](docs/runbook.md): operação local;
-- [`docs/verification.md`](docs/verification.md): evidências fornecidas e critérios de verificação;
+- [`docs/verification.md`](docs/verification.md): evidências de verificações executadas pelo mantenedor;
+- [`docs/acceptance-matrix.md`](docs/acceptance-matrix.md): rastreabilidade de requisitos e evidências;
 - [`postman/simple-voting.postman_collection.json`](postman/simple-voting.postman_collection.json): collection da API.
 
 ## Operação e limites conhecidos
 
-- votos são imutáveis e perguntas com votos não devem ser apagadas;
-- rate limiting é responsabilidade da infraestrutura;
-- IP bruto não é persistido;
+- perguntas e opções são Content Entities customizadas; votos são registros internos imutáveis;
+- `machine_name` é contrato público estável; opções podem ser editadas antes de receberem votos.
+- o hot path não usa locks: `UNIQUE(question_id, uid)` decide duplicidade sob concorrência;
+- rate limiting é responsabilidade da infraestrutura; não há garantia de fairness nem proteção distribuída contra abuso nesta aplicação;
+- IP bruto não é persistido e resultados não expõem votantes;
 - alterações destrutivas de schema exigem backup e update hook;
-- o dump de demonstração não deve conter credenciais nem dados pessoais.
+- `dump/simple-voting-demo.sql` é entrega obrigatória: a mudança para Content Entities torna necessária sua regeneração; o artefato final deve ser restaurável, não conter secrets/dados pessoais/votos e preservar os schemas de perguntas, opções e votos;
+- concorrência precisa ser comprovada em MySQL real; testes sequenciais e Postman não demonstram disputa simultânea.

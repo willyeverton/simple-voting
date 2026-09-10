@@ -29,3 +29,6 @@ tooling:
   quality:
     service: appserver
     cmd: bash /app/scripts/quality.sh
+  quality-drupal:
+    service: appserver
+    cmd: bash /app/scripts/quality-drupal.sh
