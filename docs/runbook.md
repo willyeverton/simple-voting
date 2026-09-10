@@ -37,7 +37,7 @@ lando drush updb -y
 lando drush cr
 ```
 
-A instalação/atualização do módulo instala `simple_voting_theme` e o define como tema frontend padrão, preservando o tema administrativo. Após o cache rebuild, revise menus e regiões do tema. Para rollback operacional, altere `system.theme:default` para o tema anterior e reconstrua o cache.
+A instalação/atualização do módulo instala `simple_voting_theme`, mas não o define como tema frontend padrão. A ativação é decisão operacional explícita; depois dela, revise menus e regiões. Para rollback, restaure o tema anterior e reconstrua o cache.
 
 Conceda as permissões do módulo a roles locais de teste sem versionar credenciais ou dumps contendo dados pessoais.
 
@@ -49,17 +49,18 @@ lando phpstan
 lando phpunit
 lando phpunit-drupal
 lando quality
+lando quality-drupal
 ```
 
-O workflow remoto executa os gates estáticos e a suíte Unit. As suítes Kernel/Functional dependem de um site Drupal, banco de teste e URL funcional; por isso, são gates locais obrigatórios antes da entrega, não etapas do workflow remoto atual.
+O workflow remoto executa os gates estáticos e a suíte Unit. `quality-drupal.sh` executa `quality.sh` e, em seguida, Kernel/Functional no appserver. As suítes Drupal dependem de um site instalado, banco de teste e URL funcional; por isso, continuam como gate local obrigatório e não são adicionadas ao workflow remoto. Execute o script no appserver após exportar `SIMPLETEST_DB` e `SIMPLETEST_BASE_URL` no mesmo shell.
 
-O usuário deve executar `lando quality` para a sequência de código e testes. Com um site Drupal instalado, use também a sequência completa de bootstrap:
+O usuário deve executar `lando quality` para a sequência de código e testes. Com um site Drupal instalado e as variáveis de SimpleTest configuradas, use `lando quality-drupal` para incluir Kernel/Functional. Para o bootstrap completo do ambiente:
 
 ```bash
-lando quality && lando drush updb -y && lando drush cr && lando drush status
+lando quality-drupal && lando drush updb -y && lando drush cr && lando drush status
 ```
 
-Um erro deve ser investigado; não use flags para ignorar auditorias ou requisitos de plataforma. O `drush cr` é importante porque descobre rotas, entidades e plugins em runtime.
+Um erro deve ser investigado; não use flags para ignorar auditorias ou requisitos de plataforma. O `drush cr` é importante porque descobre rotas, entidades e plugins em runtime. Registre execuções concluídas em [`verification.md`](verification.md), identificando que a evidência foi produzida pelo mantenedor e sem incluir secrets.
 
 ## Drush
 
@@ -91,24 +92,32 @@ export SIMPLETEST_BASE_URL='https://simple-voting.lndo.site'
 vendor/bin/phpunit --configuration=phpunit.drupal.xml.dist
 ```
 
-A concorrência deve ser validada em banco real com dois requests simultâneos para a mesma pergunta/usuário, com um request de voto concorrente a uma alteração administrativa de opções e com uma importação de configuração concorrente. O resultado esperado é no máximo um voto, nenhuma referência a opção órfã e importação serializada pelo gate global. O lock Drupal usa uma vida útil de 30 segundos e espera entre tentativas; a verificação deve incluir uma operação deliberadamente lenta o suficiente para demonstrar que a proteção permanece ativa durante a transação. Importações longas devem ser executadas em janela de manutenção e a política de lease deve ser revisada antes de uso produtivo.
+A concorrência deve ser validada em MySQL real com pelo menos dois requests realmente simultâneos para a mesma pergunta e usuário. O esperado é exatamente um `201`, um `409 DUPLICATE_VOTE` e uma única linha para `(question_id, uid)`. Repita com usuários distintos e confirme que ambos podem persistir: o hot path não usa lock Drupal nem serializa a pergunta; a constraint `UNIQUE(question_id, uid)` é a autoridade. Um runner sequencial do Postman não prova concorrência.
+
+Perguntas/opções são conteúdo e não participam de importação de configuração. Limitações honestas: a Schema API não fornece foreign keys físicas; rate limiting/fairness são externos; falha de infraestrutura pode retornar `500`; a aplicação garante no máximo um voto por usuário/pergunta, não disponibilidade ilimitada.
 
 Após uma falha deliberada na sincronização de opções, confirme que as linhas de opção voltaram ao estado anterior e que cada `image_fid` possui o uso `simple_voting/voting_option` correspondente; arquivos anexados apenas pela operação falha devem voltar a temporários sem uso do módulo. Erros da API retornam `X-Request-ID`. Ao investigar uma falha, associe esse valor aos eventos do canal `simple_voting`. Não registre nem solicite senhas, tokens, payloads completos ou IP bruto durante o diagnóstico.
 
 ## Tema frontend
 
-A instalação e os updates do módulo mantêm a ativação automática de `simple_voting_theme`, sem alterar o tema administrativo. O tema frontend anterior é guardado para rollback. Se for necessário restaurá-lo:
+A instalação e os updates do módulo instalam `simple_voting_theme`, mas não alteram o tema frontend ou administrativo configurado. Para ativar a apresentação demonstrativa explicitamente:
+
+```bash
+lando drush theme:enable simple_voting_theme -y
+lando drush config:set system.theme default simple_voting_theme -y
+lando drush cr
+```
+
+Para restaurar outro tema frontend, confirme antes que ele continua instalado e que a troca não interfere no tema administrativo:
 
 ```bash
 lando drush config:set system.theme default NOME_DO_TEMA -y
 lando drush cr
 ```
 
-Confirme antes que o tema anterior continua instalado e que a troca não interfere no tema administrativo.
-
 ## Dump de demonstração
 
-O arquivo `../dump/simple-voting-demo.sql` contém um snapshot ordenado do ambiente Drupal com configuração, `core.extension`, `key_value`, blocos e schemas necessários para o bootstrap. Para evitar transportar dados pessoais ou credenciais locais, o dump não transporta usuários, sessões, registros de votos, logs, caches nem dados de tabelas temporárias de teste; tabelas voláteis ficam apenas com sua estrutura. O e-mail administrativo foi normalizado para um domínio reservado e a definição vazia de `simple_voting_vote` preserva o schema sem transportar identidades ou votos.
+O arquivo `../dump/simple-voting-demo.sql` é obrigatório, mas a mudança do modelo para Content Entities customizadas torna necessária sua **regeneração**. Não trate o artefato anterior como compatível até aplicar updates, exportar novamente e comprovar um restore limpo. O snapshot final deve incluir configuração mínima, `core.extension`, `key_value`, blocos, tabelas e Content Entities demonstrativas de pergunta/opção, além da estrutura vazia de `simple_voting_vote`. Não deve transportar usuários, sessões, votos, logs, caches, secrets, credenciais locais nem dados temporários de teste.
 
 A restauração deve ser validada somente em um ambiente limpo com o Drupal base instalado. Não importe este arquivo em um banco existente sem backup verificado:
 
@@ -119,9 +128,9 @@ lando drush updb -y
 lando drush cr
 ```
 
-Como os usuários não são transportados, crie uma conta administrativa local após o import. A tabela `simple_voting_vote` deve existir e permanecer vazia após a restauração.
+Procedimento de regeneração: parta de ambiente descartável atualizado, cadastre somente perguntas/opções demonstrativas sem votos, exporte de forma determinística e sanitizada, revise o diff SQL para dados pessoais/secrets e restaure o novo arquivo em outro ambiente limpo. Registre commit, data e contagens esperadas. Não use `updb` após o import para mascarar um dump antigo: o artefato entregue já deve representar o schema atual.
 
-O dump é um artefato de banco; arquivos binários enviados não são substituídos por ele. Após a restauração, confirme que as opções continuam acessíveis e que imagens locais, quando usadas, foram fornecidas separadamente ou removidas do cenário de demonstração.
+Como os usuários não são transportados, crie uma conta administrativa local após o import. As tabelas `voting_question`, `voting_option` e `simple_voting_vote` devem existir; votos devem permanecer em zero. O dump é um artefato de banco; arquivos binários enviados não são substituídos por ele. Após a restauração, confirme que as opções continuam acessíveis e que imagens locais, quando usadas, foram fornecidas separadamente ou removidas do cenário de demonstração.
 
 ## Desinstalação destrutiva
 

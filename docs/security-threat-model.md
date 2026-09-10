@@ -1,41 +1,32 @@
-# Controles de segurança
+# Controles de segurança e threat model
 
-Este documento descreve os controles de segurança presentes no módulo.
+## Ativos e fronteiras
 
-## Dados protegidos
+Protegem-se integridade/segredo da contagem, identidade e autorização Drupal, Content Entities de pergunta/opção, votos internos, uploads, configuração global, logs e credenciais. CMS e API manual são fronteiras não confiáveis; todo input é validado server-side.
 
-- Integridade da contagem de votos.
-- Identidade e autorização dos usuários.
-- Configuração das perguntas.
-- Imagens e arquivos enviados.
-- Credenciais e tokens de integração.
-- Logs operacionais.
-
-## Controles
-
-| Área | Controle |
-|---|---|
-| Voto duplicado | Constraint única por `(question_id, uid)`, lock por pergunta e transação de banco. |
-| Opção incompatível | A opção é validada junto com o identificador da pergunta antes da persistência. |
-| Administração | Permissões Drupal e verificações de acesso protegem rotas, formulários e operações de entidade. |
-| CSRF | Form API protege o CMS e requisições de sessão que alteram estado exigem token CSRF. |
-| XSS | Títulos e descrições passam por validação e são renderizados com saída segura. |
-| Upload | Extensão, tamanho, MIME, destino e uso Drupal do arquivo são verificados. |
-| Enumeração | Respostas e regras de autorização não expõem dados de perguntas ou resultados sem permissão. |
-| Segredos | Credenciais ficam fora do repositório e não são incluídas em logs, respostas ou dumps. |
-| SQL injection | Consultas usam a Database API/Query Builder e parâmetros Drupal. |
-| Excesso de carga | Índices e agregações reduzem consultas desnecessárias; rate limiting pertence à infraestrutura. |
-| Cache | Cache contexts, tags e invalidação consideram usuário, permissões, pergunta e configuração. |
-| Erros | O cliente recebe mensagens estáveis sem SQL, stack trace, tokens ou detalhes internos. |
+| Ameaça | Controle | Limitação residual |
+|---|---|---|
+| Voto duplicado por retry/concorrência | `UNIQUE(question_id, uid)` e tradução para `409 DUPLICATE_VOTE`; hot path sem locks | Disponibilidade do banco continua necessária |
+| Troca de opção entre perguntas | Validação conjunta por IDs internos antes do insert | Sem foreign keys físicas na Schema API |
+| Alteração histórica de alternativa | Opção com votos pode ser editada, mas não removida; alterações em opções sem votos são permitidas | Correções textuais são possíveis mesmo após votos; a remoção continua bloqueada; nova composição exige nova pergunta/novo `machine_name` |
+| Rename/quebra de integrações | `machine_name` público único e imutável | Migração de identificador não é suportada |
+| Vazamento de resultados | Fluxo comum exige voto prévio e `show_results=true`; bypass somente por `view voting results`; cache varia por usuário/permissão | Admin com bypass vê resultados por definição |
+| Bypass do global off | Gate comum bloqueia catálogo, detalhe, voto e resultados; API `503` | Não substitui indisponibilidade de infraestrutura |
+| CSRF | Form API no CMS; cookie + POST API exige `X-CSRF-Token` | Basic Auth somente sobre HTTPS |
+| XSS/upload malicioso | Escape/filter de saída e validação de extensão, tamanho, MIME, destino e file usage | Scanner antimalware depende da infraestrutura |
+| Enumeração | Autenticação/permissões e respostas mínimas | `503` revela apenas indisponibilidade global |
+| SQL injection | Database API/Query Builder com parâmetros | Queries novas exigem revisão |
+| Abuso/carga | Índices e agregações | Rate limiting, quotas, fairness e proteção DDoS são externos |
+| Segredos/dados pessoais no dump | Dump obrigatório sanitizado, sem usuários, sessões, votos, tokens ou logs | Binários e restore precisam validação separada |
 
 ## Logging
 
-- Usar o canal `simple_voting`.
-- Registrar UID e identificador da pergunta somente quando necessário para diagnóstico.
-- Nunca registrar senha, Basic Auth, token CSRF, payload completo, IP bruto ou o objeto completo da exceção.
-- Associar falhas inesperadas a um `X-Request-ID` seguro sem expor detalhes ao cliente.
+Usar `simple_voting` e contexto mínimo: UID quando necessário, `machine_name`, endpoint, código e `X-Request-ID` validado. Nunca registrar senha, Basic Auth, CSRF token, payload completo, IP bruto, SQL ou objeto integral da exceção.
+
+## Concorrência
+
+A garantia é **no máximo um voto por usuário/pergunta**, decidida pelo banco. Não se promete ordenação global, fairness, ausência de latência nem funcionamento sem banco. Usuários diferentes não devem ser serializados. Teste sequencial não comprova concorrência; a evidência requer requests simultâneos contra MySQL real.
 
 ## Dependências
 
-- Manter dependências de produção e desenvolvimento no lock file.
-- Executar auditoria do Composer sem ignorar advisories ou requisitos de plataforma.
+Manter lock file e auditoria Composer sem ignorar advisories ou requisitos de plataforma.

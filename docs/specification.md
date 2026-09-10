@@ -1,120 +1,57 @@
-# Simple Voting — Especificação do sistema
+# Simple Voting — Especificação
 
-Esta documentação descreve o comportamento atual do módulo customizado de votação.
+## 1. Escopo
 
-## 1. Objetivo
+Backend Drupal 11 para administração e votação autenticada pelo CMS ou API manual versionada. A lógica central não usa JSON:API nem `node`.
 
-O sistema é um backend Drupal 11 no qual administradores cadastram perguntas com opções de resposta e usuários autenticados votam uma única vez por pergunta, pela interface do Drupal ou por uma API manual para aplicações externas.
+## 2. Modelo obrigatório
 
-A solução é modular, observável, testável e preserva a integridade dos votos sob concorrência.
+- Pergunta: Content Entity customizada, com ID interno e `machine_name` público único, estável e imutável.
+- Opção: Content Entity customizada pertencente à pergunta.
+- Voto: registro transacional interno e imutável; não é recurso CRUD público.
+- Opções podem ser editadas a qualquer momento. Opção com votos não pode ser removida.
+- O dump `dump/simple-voting-demo.sql` é entrega obrigatória, restaurável e sanitizada; não inclui secrets, usuários, sessões, votos ou logs.
 
-## 2. Atores
+## 3. Funcionalidade
 
-- **Administrador:** gerencia perguntas, opções, status e configuração global.
-- **Usuário:** consulta perguntas disponíveis; usuário autenticado autorizado registra votos.
-- **Cliente externo:** consome a API com autenticação Drupal obrigatória e permissões específicas.
-- **Operação:** consulta logs e executa verificações do sistema.
+### Administração
 
-## 3. Escopo funcional
+Criar perguntas/opções, definir `show_results`, publicar/fechar perguntas e alternar `voting_enabled`. Opções podem ser editadas a qualquer momento; opção com votos não pode ser removida.
 
-### 3.1 Administração
+### CMS e API manual
 
-- Criar, editar e remover ou desativar perguntas.
-- Identificar cada pergunta por um identificador único e estável.
-- Cadastrar várias opções por pergunta.
-- Cada opção pode possuir título, descrição breve e imagem.
-- Configurar se os resultados da pergunta serão exibidos após o voto.
-- Abrir ou encerrar uma pergunta.
-- Habilitar ou desabilitar a votação globalmente.
-- Controlar operações por permissões Drupal.
+Ambos oferecem catálogo, detalhe, voto e resultados sob as mesmas regras de domínio. O catálogo e o detalhe mostram apenas perguntas publicadas para usuários comuns; administradores com `administer simple voting` veem também perguntas fechadas. Todos os endpoints API exigem autenticação Drupal e `access simple voting API`; voto também exige `vote in polls`, e sessão em escrita exige CSRF.
 
-### 3.2 Interface Drupal
+A API manual expõe:
 
-- Listar perguntas disponíveis.
-- Acessar uma pergunta individualmente.
-- Selecionar uma opção e registrar o voto.
-- Impedir segundo voto do mesmo usuário na mesma pergunta.
-- Confirmar o voto sem revelar resultados quando a pergunta estiver configurada para ocultá-los.
-- Exibir resultados quando permitido.
-- Bloquear a votação globalmente desabilitada; se o lifecycle aberto/fechado for adotado, bloquear perguntas fechadas.
-- Quando a votação global estiver desabilitada, o catálogo CMS fica indisponível e a listagem API retorna `data` vazio.
-
-### 3.3 API manual
-
-A API manual não utiliza JSON:API para a lógica central. Todos os endpoints exigem autenticação Drupal; leitura, voto e resultados ocultos possuem permissões próprias. O contrato está em [`openapi.yaml`](openapi.yaml).
-
-Capacidades obrigatórias:
-
-- Listar perguntas disponíveis.
-- Consultar detalhes de uma pergunta pelo identificador.
-- Registrar voto.
-- Consultar resultados conforme a política de visibilidade.
+- `GET /api/v1/questions`;
+- `GET /api/v1/questions/{question_id}` (`question_id` contém o `machine_name` público);
+- `POST /api/v1/questions/{question_id}/votes`;
+- `GET /api/v1/questions/{question_id}/results`.
 
 ## 4. Regras de negócio
 
-1. Perguntas não podem ser representadas por entidades `node`.
-2. O identificador da pergunta é único e não deve mudar depois de publicado ou referenciado pela API.
-3. Uma pergunta disponível pode receber votos somente quando a votação global estiver habilitada e ela estiver aberta.
-4. Apenas usuários autenticados e autorizados podem votar.
-5. Uma combinação `(question_id, uid)` pode possuir no máximo um voto.
-6. A opção enviada deve existir e pertencer à pergunta informada.
-7. Uma tentativa duplicada deve produzir um resultado de domínio previsível e não um erro fatal.
-8. A regra de unicidade deve ser garantida no banco, não apenas na interface.
-9. O resultado público deve respeitar `show_results` e não deve expor a identidade dos votantes.
-10. Falhas de lock, banco ou infraestrutura devem ser registradas em canal de log dedicado e mapeadas para respostas seguras.
+1. Somente pergunta publicada e votação global ligada recebem voto.
+2. Apenas usuário autenticado/autorizado vota.
+3. Opção deve existir e pertencer à pergunta.
+4. `(question_id, uid)` possui no máximo um voto, garantido por unique constraint.
+5. Violação da constraint é `409 DUPLICATE_VOTE`, não erro fatal.
+6. Fluxo comum de resultados exige que o usuário já tenha votado **e** `show_results=true`.
+7. `view voting results` bypassa voto prévio e `show_results`, sem conceder voto ou administração.
+8. Resultados nunca expõem identidade de votantes.
+9. Global off bloqueia catálogo, detalhe, voto e resultados no CMS e API. Cada endpoint API responde `503 VOTING_DISABLED`; não há catálogo vazio nem exceção para bypass/admin.
+10. Perguntas/opções com histórico não podem ser removidas deixando votos órfãos.
 
-## 5. Diretrizes arquiteturais
+## 5. Concorrência e performance
 
-- Entidade customizada para a definição da pergunta; não usar `node`.
-- Persistência transacional de votos com constraint única `(question_id, uid)`.
-- Services para regras de negócio e Dependency Injection nos consumidores.
-- Controllers e Forms responsáveis por orquestração, validação de entrada e resposta.
-- Plugins para comportamento configurável, como bloco de votação.
-- Event Subscribers somente para preocupações transversais, como normalização de exceções HTTP.
-- Cache tags e contexts compatíveis com usuário, permissões, configuração e pergunta.
-- Queries agregadas para resultados, evitando N+1.
-- Configuração Drupal com schema e update hooks quando houver alterações persistidas.
+O hot path não usa lock Drupal. Após validações, tenta o insert; `UNIQUE(question_id, uid)` arbitra requests concorrentes. Transações, quando necessárias, são curtas. A remoção de opções com votos é bloqueada para preservar o histórico; a edição de opções com votos é permitida pois o identificador interno e os votos vinculados se mantêm. Leituras usam agregação centralizada, índices e cache variado por usuário/permissão/configuração.
 
-## 6. Segurança
+Garantias honestas: no máximo um voto por usuário/pergunta; usuários diferentes não precisam ser serializados. Não há garantia de fairness, ordenação, disponibilidade sem banco ou rate limiting na aplicação. A Schema API não fornece foreign keys físicas.
 
-- Permissões declaradas e verificadas nas rotas e nos limites de negócio.
-- CSRF em requisições de sessão que alteram estado.
-- Validação server-side de todos os payloads.
-- Sanitização/escape de títulos, descrições e mensagens.
-- Validação de extensão, tamanho e destino de imagens.
-- Erros externos sem stack trace, SQL ou detalhes internos.
-- Logs sem senhas, tokens ou payloads sensíveis.
-- CORS restrito quando o cliente externo estiver em outra origem.
-- Auditoria das dependências via Composer.
+## 6. Segurança e observabilidade
 
-## 7. Concorrência e performance
+Validar input, CSRF, permissões, upload e pertencimento; escapar saída; não logar secrets/payloads/IP bruto; não retornar SQL/stack traces. Canal `simple_voting` registra contexto seguro e `X-Request-ID`. Global off, duplicidade, acesso negado e falha de persistência possuem códigos estáveis.
 
-A solução deve suportar duplo clique, retries e workers concorrentes. A implementação deve combinar um gate global para importações de configuração, um lock de aplicação por pergunta para voto e mutações administrativas concorrentes e a constraint única do banco. Os locks devem ser liberados em `finally` e uma violação de unicidade deve ser tratada como duplicidade de negócio.
+## 7. Fora do escopo
 
-Os endpoints de leitura devem evitar consultas repetidas e utilizam cache com invalidação específica por pergunta.
-
-## 8. Observabilidade
-
-Criar canal de log dedicado para:
-
-- Voto duplicado.
-- Pergunta ou opção inexistente.
-- Votação global bloqueada.
-- Lock indisponível.
-- Violação de constraint.
-- Falha inesperada de persistência.
-- Erros da API.
-- Acessos negados aos resultados.
-
-Os eventos devem conter contexto operacional seguro, como UID, identificador da pergunta, endpoint e código de resposta.
-
-## 9. Fora do escopo
-
-- Design visual sofisticado.
-- Aplicação React completa.
-- JSON:API.
-- Microserviços ou event sourcing.
-- Gateway externo.
-- Mecanismo de votação anônima por IP.
-- Alteração de votos já computados, salvo nova exigência.
-
+React, JSON:API para lógica central, voto anônimo/IP, edição de voto, microserviços, event sourcing, rate limiting distribuído e CRUD público de votos.

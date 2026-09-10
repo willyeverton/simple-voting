@@ -23,9 +23,9 @@ O foco é um módulo Drupal 11 pequeno, explícito e substituível, não uma abs
 Administrador ── CMS administrativo ──┐
                                      │
 Usuário autenticado ── CMS/bloco ────┼── Serviços de domínio ── Persistência
-                                     │                           ├─ Config Entity
-Cliente externo ── API manual ───────┘                           ├─ opções
-                                                                 └─ votos
+                                     │                           ├─ Content Entity pergunta
+Cliente externo ── API manual ───────┘                           ├─ Content Entity opção
+                                                                 └─ votos internos
 
 Operação ── logs, métricas, Lando/CI, backups, runbook
 ```
@@ -34,37 +34,28 @@ O módulo não delega a lógica central ao JSON:API e não usa entidades `node` 
 
 ## 3. Fronteiras de domínio e persistência
 
-### 3.1 Pergunta como Config Entity
+### 3.1 Pergunta como Content Entity customizada
 
-`VotingQuestion` usa `ConfigEntityBase` para representar a definição administrativa com machine name estável e exportável pelo Configuration Management.
+`VotingQuestion` é uma Content Entity customizada, não `node` nem Config Entity. Possui ID interno e um campo `machine_name` público, único, estável e imutável desde a criação. URLs e API usam `machine_name`; persistência e referências internas usam o ID da entidade.
 
-A entidade contém:
+A entidade contém UUID, `machine_name`, título, status fechado/publicado, `show_results` e timestamps. Uma pergunta nova começa fechada. Conteúdo de perguntas não é configuração deployável e não deve ser promovido por Configuration Management.
 
-- identificador machine name;
-- UUID Drupal;
-- título;
-- status aberto/fechado;
-- `show_results`;
-- timestamps `created` e `changed`.
+### 3.2 Opção como Content Entity customizada
 
-O identificador deve usar somente letras minúsculas, números e underscore (`_`), sem hífen (`-`), e não deve mudar depois que integrações ou URLs passarem a referenciá-lo. Uma pergunta nova começa fechada para que a criação e a publicação sejam atos administrativos separados.
+`VotingOption` é uma Content Entity customizada vinculada pelo ID interno da pergunta. Ela permite ordenação e agregação sem embutir alternativas na pergunta. Não é recurso CRUD público da API.
 
-Perguntas são tratadas como configuração relativamente estável; opções e votos permanecem separados como dados operacionais.
-
-### 3.2 Opções em tabela própria
-
-As opções ficam em `simple_voting_option`, vinculadas por `question_id`. Isso evita serializar dados operacionais dentro de configuração e permite ordenar e agregar sem decodificar blobs.
+Opções podem ser adicionadas, editadas, reordenadas ou removidas a qualquer momento, mas uma opção com votos não pode ser removida para preservar o histórico; o administrador pode encerrar a pergunta se necessário. Uma nova composição também pode ser criada como nova pergunta com novo `machine_name`.
 
 A camada `OptionStorage` é responsável por:
 
 - leitura ordenada;
 - sincronização administrativa;
 - validação de pertencimento;
-- política de remoção;
+- política de remoção e edição com votos;
 - associação e liberação de uso de arquivos;
 - invalidação de cache.
 
-Uma opção com votos não é removida. A administração deve preservar o histórico ou encerrar a pergunta.
+Uma opção com votos pode ser editada, mas não removida. A administração deve preservar o histórico ou encerrar a pergunta.
 
 ### 3.3 Votos como dados transacionais
 
@@ -109,8 +100,7 @@ web/modules/custom/simple_voting/
 - `OptionStorage`: persiste opções e File API usage;
 - `VoteStorage`: persiste e consulta votos;
 - `VotingService`: único caminho para registrar voto;
-- `QuestionPersistenceService`: coordena a persistência da pergunta e a sincronização das opções sob lock e transação de banco; operações da File API não possuem rollback transacional automático;
-- `VotingMutationLock`: lock global de mutação para importações de configuração e lock compartilhado por pergunta para voto e mutações administrativas;
+- `QuestionPersistenceService`: coordena a persistência das Content Entities e rejeita remoção de opções que já tenham votos; a edição de opções com votos é permitida; operações da File API não possuem rollback transacional automático;
 - `VotingResultsService`: único cálculo de contagem e percentual;
 - `VotingVisibilityService`: aplica a política de resultados públicos/ocultos;
 - `QuestionDeletionService`: impede remoção com votos;
@@ -124,53 +114,41 @@ Controllers, forms, plugins e services usam dependency injection para as regras 
 
 ### Tema global e apresentação
 
-`simple_voting_theme` é o tema frontend global do site. Ele fornece o shell público, regiões de header, menus, mensagens, breadcrumb, conteúdo, sidebars e footer, além dos estilos acessíveis usados pelo CMS e pelas páginas de votação. A instalação do módulo instala o tema e define apenas `system.theme:default`; o tema administrativo configurado em `system.theme:admin` permanece inalterado.
+`simple_voting_theme` é um tema frontend opcional do site. Ele fornece o shell público, regiões de header, menus, mensagens, breadcrumb, conteúdo, sidebars e footer, além dos estilos acessíveis usados pelo CMS e pelas páginas de votação. A instalação do módulo instala o tema sem alterar `system.theme:default` ou `system.theme:admin`; a aplicação decide explicitamente se deseja ativá-lo.
 
 O tema não contém regras de votação, validação de payload, autorização, persistência, cálculo de resultados ou decisões de cache de domínio. Login/logout e visibilidade de menus continuam sendo controlados pelos menus e permissões nativas do Drupal. A apresentação usa Twig, render arrays e CSS sem React ou dependência frontend adicional.
 
-A mudança do tema padrão é operacional e reversível por configuração Drupal. O módulo guarda o tema frontend anterior em State somente quando troca um valor diferente e não altera o tema administrativo. Após a instalação/atualização, o cache de descoberta deve ser reconstruído e as regiões/blocos opcionais devem ser revisados no ambiente real.
+A ativação do tema é operacional e reversível por configuração Drupal. Após a instalação/atualização, o cache de descoberta deve ser reconstruído e as regiões/blocos opcionais devem ser revisados no ambiente real.
 
 ## 5. Fluxo de administração
 
 1. O administrador acessa uma rota protegida por `administer simple voting`.
-2. As alterações administrativas adquirem o gate global e, quando aplicável, o lock da pergunta.
-3. `VotingQuestionForm` valida título, machine name, opções e upload.
-4. O formulário pode reconstruir somente o wrapper de opções via AJAX, preservando os valores no `FormState`.
-5. O `ConfigEntityStorage` salva a definição da pergunta.
-6. `OptionStorage` sincroniza as opções em operação controlada.
-7. Opções removidas são bloqueadas quando possuem votos.
+2. `VotingQuestionForm` valida título, `machine_name`, opções e upload.
+3. O formulário pode reconstruir o wrapper de opções via AJAX, preservando valores no `FormState`.
+4. O Entity Storage salva a Content Entity da pergunta.
+5. O storage salva as Content Entities de opção.
+6. Opções com votos podem ser editadas, mas não removidas; opções sem votos podem ser editadas ou removidas.
 8. Arquivos aceitos são enviados para `public://simple_voting/options/`, permanecem temporários até a sincronização da opção e tornam-se permanentes com registro em `file_usage`.
 9. A transação do banco não desfaz automaticamente os efeitos da File API; a sincronização mantém um journal de operações e compensa usos anexados/liberados quando a transação falha.
 10. Tags da pergunta e da listagem são invalidadas após a alteração.
 
-A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos não podem ser removidas; devem ser fechadas/arquivadas. Isso preserva auditoria e evita votos órfãos.
+A remoção de pergunta passa por `QuestionDeletionService`. Perguntas com votos não podem ser removidas para preservar auditoria e evitar votos órfãos. Perguntas sem votos podem ser excluídas. O administrador também pode fechar uma pergunta para encerrar novas votações.
 
 ## 6. Fluxo de votação e concorrência
 
 `VotingService::castVote()` aplica as regras na seguinte ordem:
 
-1. exige UID autenticado;
-2. adquire o gate global e o lock determinístico por pergunta, compartilhado com mutações administrativas;
-3. verifica `voting_enabled`;
-4. carrega a pergunta;
-5. exige status aberto;
-6. valida `question_id + option_id` em conjunto sob o lock;
-7. inicia transação;
-8. verifica voto existente;
-9. insere o voto;
-10. converte violação da constraint em `DuplicateVoteException`;
-11. confirma a transação e invalida cache após sucesso;
-12. libera o lock em `finally`.
+1. exige UID autenticado e permissão;
+2. verifica `voting_enabled`;
+3. resolve a pergunta pelo `machine_name` público e exige publicação;
+4. valida que a opção existe e pertence à pergunta;
+5. tenta inserir o voto interno;
+6. converte violação de `UNIQUE(question_id, uid)` em `DuplicateVoteException`;
+7. invalida cache após sucesso.
 
-A proteção possui três camadas:
+O hot path não adquire locks Drupal nem serializa votos. A constraint única é a autoridade para duplo clique, retries e múltiplos workers; usuários diferentes podem votar em paralelo. Uma verificação prévia de duplicidade pode melhorar UX, mas não decide integridade. Transações devem ser curtas e restritas à gravação necessária.
 
-- **gate global de mutação:** serializa importações de configuração contra votos e mutações administrativas;
-- **lock de aplicação por pergunta:** serializa voto, sincronização de opções e exclusão para evitar que uma opção seja removida entre a validação e a persistência do voto;
-- **constraint de banco:** a chave única continua funcionando em múltiplos workers, hosts ou caminhos alternativos.
-
-O segundo argumento de `LockBackendInterface::acquire()` é a vida útil do lock, não um timeout de espera. `VotingMutationLock` usa uma vida útil de 30 segundos e chama `wait()` entre tentativas não bloqueantes. O limite deve cobrir a operação transacional e o ciclo de importação; caso uma operação administrativa ou importação passe a executar trabalho mais longo, a política deve ser revisada ou o lock renovado explicitamente.
-
-A Schema API do Drupal não cria foreign keys físicas para tabelas customizadas. Por isso, a integridade entre opções e votos depende do lock compartilhado, das transações e da política de não remover opções que já possuem votos.
+A proteção contra edição e remoção de opções com votos preserva a integridade do histórico. A ausência de foreign keys físicas ainda exige validação server-side, bloqueio de exclusão com votos e procedimentos operacionais cuidadosos. Importações de configuração não transportam perguntas/opções, pois ambas são conteúdo.
 
 Falhas são transformadas em resultados seguros:
 
@@ -180,8 +158,9 @@ Falhas são transformadas em resultados seguros:
 | pergunta fechada | `QuestionClosedException` | `422` |
 | opção incompatível | `InvalidOptionException` | `422` |
 | votação global desabilitada | `VotingDisabledException` | `503` |
-| lock indisponível | `VoteLockUnavailableException` | `503` |
 | falha inesperada de persistência | `PersistenceFailureException` | `500` |
+
+Não existe resultado `LOCK_UNAVAILABLE` no caminho de voto planejado: o hot path não adquire lock de aplicação. Indisponibilidade ou falha inesperada do banco é falha de persistência, enquanto uma violação da constraint única é sempre traduzida para duplicidade.
 
 Nenhum caminho de erro retorna SQL, stack trace, token ou detalhes internos.
 
@@ -189,14 +168,12 @@ Nenhum caminho de erro retorna SQL, stack trace, token ou detalhes internos.
 
 O projeto diferencia visibilidade histórica de elegibilidade para mutação:
 
-- a listagem da API contém somente perguntas abertas disponíveis para votação quando `voting_enabled` está habilitado; quando desabilitado, retorna catálogo vazio;
-- o detalhe da API pode retornar uma pergunta fechada conhecida com `status: closed`;
-- o CMS pode exibir perguntas fechadas como somente leitura;
+- com `voting_enabled` habilitado, a listagem e o detalhe CMS e API mostram somente perguntas publicadas para usuários comuns; administradores com `administer simple voting` veem todas as perguntas, inclusive fechadas;
 - pergunta fechada nunca aceita voto;
-- `voting_enabled` bloqueia novas escritas; a listagem CMS exibe somente uma mensagem de indisponibilidade e a listagem API retorna catálogo vazio enquanto a configuração estiver desabilitada.
-- A configuração não apaga nem oculta resultados históricos autorizados.
+- com `voting_enabled` desabilitado, catálogo, detalhe, voto e resultados ficam indisponíveis em CMS e API; a API responde `503 VOTING_DISABLED` em todos os endpoints, sem retornar catálogo vazio ou dado histórico;
+- resultados comuns exigem `show_results=true` e voto prévio do usuário; `view voting results` é bypass explícito para consulta antes do voto ou com resultados ocultos.
 
-Essa separação evita usar `404` para representar um recurso que existe, mas não aceita mutação.
+Perguntas fechadas retornam `404` para usuários comuns em rotas de votação e detalhe, mas permanecem visíveis para administradores; isso evita expor perguntas encerradas no catálogo público.
 
 ## 8. Segurança e autorização
 
@@ -205,7 +182,7 @@ Essa separação evita usar `404` para representar um recurso que existe, mas n�
 - `administer simple voting`: CRUD, lifecycle e configuração;
 - `access simple voting API`: entrada em endpoints API;
 - `vote in polls`: CMS e registro de voto;
-- `view voting results`: resultados ocultos.
+- `view voting results`: bypass da exigência de voto prévio e de `show_results`.
 
 `access simple voting API` não implica permissão de voto. A rota API garante a capacidade técnica; o controller e o serviço validam a capacidade de negócio.
 
@@ -238,7 +215,7 @@ O módulo usa o canal `simple_voting`. Logs podem registrar UID, question ID, en
 - percentual arredondado para uma casa decimal;
 - percentuais iguais a zero quando o total é zero.
 
-O serviço devolve dados estáveis e metadata de cache. A autorização fica no limite do consumidor, enquanto a query permanece única para evitar divergência entre canais.
+O serviço devolve dados estáveis e metadata de cache. Antes da query, a política comum exige `show_results=true` e voto prévio do usuário; `view voting results` ignora ambas as condições. A resposta varia por usuário e permissão para impedir vazamento entre caches.
 
 ## 10. Cache
 
@@ -279,13 +256,13 @@ A collection Postman é parte do contrato de integração e deve ser atualizada 
 
 ### Configuração versus dados
 
-- perguntas são configuração e podem ser promovidas via Configuration Management;
-- identificadores de perguntas não podem ser renomeados durante importação;
-- perguntas com opções ou votos runtime não podem ser removidas durante importação;
-- a importação adquire o gate global de mutação até sua conclusão, bloqueando votos e mutações administrativas concorrentes;
-- se o lock global não estiver disponível, a importação é rejeitada com mensagem operacional segura;
-- opções e votos são dados runtime e não devem ser tratados como configuração deployável;
-- dumps devem excluir credenciais, tokens e dados pessoais desnecessários;
+- perguntas e opções são Content Entities e dados runtime; não são promovidas via Configuration Management;
+- `machine_name` é público e não pode ser renomeado;
+- opções podem ser editadas a qualquer momento, mas só podem ser removidas enquanto não tiverem votos;
+- votos são registros internos, não entidades públicas;
+- configuração importável limita-se a settings e metadados apropriados; importação não serializa o hot path de voto;
+- o dump obrigatório deve excluir credenciais, tokens, usuários, sessões, votos e dados pessoais desnecessários;
+- qualquer mudança de schema, modelo de entidades ou dados demonstrativos torna o dump anterior obsoleto e exige regenerar `dump/simple-voting-demo.sql`, revisar o diff SQL e comprovar restore limpo antes da entrega; a documentação não afirma que o artefato não regenerado representa o modelo atual;
 - `settings.php`, `settings.local.php`, senhas e variáveis de ambiente não entram no Git.
 
 ### Atualizações
@@ -301,8 +278,8 @@ A collection Postman é parte do contrato de integração e deve ser atualizada 
 Monitorar:
 
 - crescimento de `DUPLICATE_VOTE`;
-- `LOCK_UNAVAILABLE`;
-- falhas de unique constraint inesperadas;
+- `VOTING_DISABLED` por endpoint;
+- taxa de `DUPLICATE_VOTE` e violações da unique constraint;
 - HTTP 5xx;
 - falhas de conexão com banco;
 - latência da agregação de resultados;
